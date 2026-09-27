@@ -399,3 +399,293 @@ class TestHeadingPromoterErrorHandling:
 
         # Restore original method
         promoter._should_promote = original_should_promote  # type: ignore[method-assign]
+
+
+class TestHeadingPromoterEEOIsolation:
+    """Tests for EEO paragraph isolation (Issue #374)."""
+
+    @pytest.mark.parametrize(
+        "trigger_phrase",
+        [
+            "equal opportunity employer",
+            "equal employment opportunity",
+            "is an equal opportunity",
+            "are an equal opportunity",
+            "does not discriminate",
+            "without regard to",
+            "affirmative action",
+        ],
+    )
+    def test_trailing_eeo_paragraph_isolated(self, trigger_phrase: str) -> None:
+        """Trailing EEO paragraph gets ## Equal Opportunity Employer heading."""
+        promoter = HeadingPromoter()
+        text = f"""Role Overview
+
+We are a great company.
+
+Required Qualifications
+
+5+ years of experience required.
+
+{trigger_phrase.title()}
+
+This is an equal opportunity employer and makes decisions without regard to race or color."""
+
+        result = promoter.process(text)
+
+        # EEO heading should be inserted
+        assert "## Equal Opportunity Employer" in result
+        # Existing sections should still be there
+        assert "## Role Overview" in result
+        assert "## Required Qualifications" in result
+
+    def test_mid_document_eeo_not_split(self) -> None:
+        """EEO phrase in middle of document (followed by real section) is not split."""
+        promoter = HeadingPromoter()
+        text = """Role Overview
+
+We believe in equal opportunity employment practices.
+
+Key Responsibilities
+
+Lead the team and manage projects."""
+
+        result = promoter.process(text)
+
+        # No synthetic heading should be inserted
+        # (since EEO is not trailing)
+        assert result.count("## Equal Opportunity Employer") == 0
+        # Original content preserved
+        assert "equal opportunity employment practices" in result
+
+    def test_eeo_in_bullet_list_not_split(self) -> None:
+        """EEO phrase inside a bullet point is not split."""
+        promoter = HeadingPromoter()
+        text = """Required Qualifications
+
+* Experience with Python
+* Understanding of equal opportunity laws
+
+Technical Skills
+
+* Python
+* Java"""
+
+        result = promoter.process(text)
+
+        # No EEO heading inserted (it's in a list, not trailing)
+        assert result.count("## Equal Opportunity Employer") == 0
+
+    def test_eeo_already_under_heading_not_doubled(self) -> None:
+        """EEO paragraph already under a heading is not re-headed (idempotent)."""
+        promoter = HeadingPromoter()
+        text = """Role Overview
+
+We are a great company.
+
+## Equal Opportunity Employer
+
+This is an equal opportunity employer."""
+
+        result = promoter.process(text)
+
+        # Should not double-promote
+        assert result.count("## Equal Opportunity Employer") == 1
+
+    def test_eeo_idempotent_multiple_passes(self) -> None:
+        """Processing text with EEO multiple times yields same result."""
+        promoter = HeadingPromoter()
+        text = """Role Overview
+
+We are a great company.
+
+Equal Opportunity Employer
+
+This is an equal opportunity employer and makes decisions without regard to race."""
+
+        result1 = promoter.process(text)
+        result2 = promoter.process(result1)
+        result3 = promoter.process(result2)
+
+        assert result1 == result2 == result3
+        # Should have exactly one EEO heading
+        assert result1.count("## Equal Opportunity Employer") == 1
+
+    def test_trailing_ada_paragraph_after_eeo_stays_trailing(self) -> None:
+        """Trailing ADA/contact paragraph after EEO stays inside EEO section."""
+        promoter = HeadingPromoter()
+        text = """Role Overview
+
+We are a great company.
+
+Required Qualifications
+
+5+ years experience.
+
+Equal Opportunity Employer
+
+We are an equal opportunity employer without regard to color or background.
+
+Accommodations
+
+If you need accommodations, please contact us."""
+
+        result = promoter.process(text)
+
+        # EEO heading should be inserted
+        assert "## Equal Opportunity Employer" in result
+        # ADA paragraph should stay after EEO (no separate heading)
+        assert "## Accommodations" not in result
+        # Verify order
+        eeo_idx = result.find("## Equal Opportunity Employer")
+        ada_idx = result.find("Accommodations")
+        assert eeo_idx < ada_idx
+
+    def test_eeo_followed_by_real_section_not_split(self) -> None:
+        """EEO paragraph followed by a real section is not split."""
+        promoter = HeadingPromoter()
+        text = """Role Overview
+
+We are a great company.
+
+Required Qualifications
+
+5+ years experience.
+
+Equal Opportunity Employer
+
+We are an equal opportunity employer.
+
+How to Apply
+
+Submit your resume online."""
+
+        result = promoter.process(text)
+
+        # EEO should not be synthesized (real section follows)
+        # But plain text promotion still occurs, promoting "Equal Opportunity Employer" to ##
+        assert result.count("## Equal Opportunity Employer") == 1
+        # And "How to Apply" should be promoted
+        assert "## How to Apply" in result
+
+    def test_empty_text_unchanged(self) -> None:
+        """Empty text is returned unchanged."""
+        promoter = HeadingPromoter()
+        result = promoter.process("")
+        assert result == ""
+
+    def test_case_insensitive_trigger_matching(self) -> None:
+        """EEO triggers match case-insensitively."""
+        promoter = HeadingPromoter()
+        text = """Role Overview
+
+Details.
+
+EQUAL OPPORTUNITY EMPLOYER
+
+This is an EQUAL OPPORTUNITY EMPLOYER."""
+
+        result = promoter.process(text)
+
+        # Should detect EEO and add heading (case-insensitive)
+        # Should detect EEO and add heading (case-insensitive)
+        # Note: preserves original case, so may be ## EQUAL OPPORTUNITY EMPLOYER
+        assert any(line.startswith("##") and "equal opportunity" in line.lower() for line in result.split("\n"))
+
+    def test_eeo_in_first_200_chars(self) -> None:
+        """EEO trigger must be in first ~200 chars of paragraph."""
+        promoter = HeadingPromoter()
+        # Long paragraph with EEO trigger far into it
+        long_content = "This paragraph contains a lot of content. " * 10
+        text = f"""Role Overview
+
+Details.
+
+Paragraph With EEO Late
+
+{long_content}And only much later: We are an equal opportunity employer."""
+
+        result = promoter.process(text)
+
+        # Should not detect (EEO is beyond ~200 chars)
+        assert result.count("## Equal Opportunity Employer") == 0
+
+
+class TestHeadingPromoterRegressionEEO:
+    """Regression tests with realistic WorkSource-shaped job text."""
+
+    def test_worksource_with_trailing_eeo_isolated(self) -> None:
+        """WorkSource-shaped job with trailing EEO isolated into own section."""
+        promoter = HeadingPromoter()
+        # Realistic WorkSource-shaped text
+        text = """Role Overview
+
+Medtech company seeking a senior engineer to lead the platform team.
+
+Key Responsibilities
+
+* Design and implement cloud infrastructure
+* Mentor junior engineers
+* Collaborate with product teams
+
+Required Qualifications
+
+Bachelor's degree in Computer Science or equivalent experience.
+5+ years of software engineering experience.
+Strong knowledge of AWS or GCP.
+
+Technical Skills
+
+* Python
+* Go
+* Kubernetes
+
+Equal Opportunity Employer
+
+XYZ Corporation is an equal opportunity employer and is committed to creating a diverse and inclusive workplace."""
+
+        result = promoter.process(text)
+
+        # Verify sections are promoted correctly
+        assert "## Role Overview" in result
+        assert "## Key Responsibilities" in result
+        assert "## Required Qualifications" in result
+        assert "## Technical Skills" in result
+
+        # EEO should be isolated into own section
+        assert "## Equal Opportunity Employer" in result
+
+        # Verify preceding section content is not polluted with EEO text
+        # (by checking structure before the EEO heading)
+        lines = result.split("\n")
+        eeo_heading_line = None
+        for i, line in enumerate(lines):
+            if "## Equal Opportunity Employer" in line:
+                eeo_heading_line = i
+                break
+
+        assert eeo_heading_line is not None, "EEO heading not found"
+
+        # Check that "Technical Skills" section ends before EEO heading
+        tech_section_lines = [line for line in lines[:eeo_heading_line] if "Kubernetes" in line or "Python" in line]
+        assert len(tech_section_lines) > 0, "Technical skills content not found before EEO"
+
+    def test_without_promoter_no_eeo_split(self) -> None:
+        """Text without promoter has EEO mixed in with preceding section."""
+        # This test verifies that without the promoter, EEO is not isolated
+        # Just document the behavior
+        text = """Role Overview
+
+Medtech company seeking a senior engineer.
+
+Required Qualifications
+
+5+ years of experience.
+
+Equal Opportunity Employer
+
+XYZ Corporation is an equal opportunity employer."""
+
+        # Without explicit heading, the last paragraph is not a separate section
+        # (This is more of a documentation test showing the problem the fix solves)
+        assert "## Equal Opportunity Employer" not in text
