@@ -247,8 +247,9 @@ class HeadingPromoter(PipelineComponent):
         if not text:
             return text
 
-        # Detect line ending type (CRLF or LF)
+        # Detect line ending type (CRLF or LF) and preserve original trailing newline status
         line_ending = "\r\n" if "\r\n" in text else "\n"
+        has_trailing_newline = text.endswith(line_ending)
 
         lines = text.split(line_ending)
         paragraphs, para_starts = self._split_paragraphs_with_indices(lines)
@@ -296,8 +297,9 @@ class HeadingPromoter(PipelineComponent):
             if preceding_para and preceding_para[-1].strip().startswith("##"):
                 return text
 
-        # Guard 4: Preceding paragraph's first line should not be a known heading
-        # (it will be promoted in phase 2 and serve as the section heading)
+        # Guard 4: If preceding paragraph's first line is a known heading (like
+        # "Equal Opportunity Employer"), it would be promoted to ## in plain heading
+        # promotion. Skip insertion to avoid double-heading on the EEO paragraph.
         if first_eeo_idx > 0:
             preceding_para = paragraphs[first_eeo_idx - 1]
             if preceding_para:
@@ -311,11 +313,17 @@ class HeadingPromoter(PipelineComponent):
 
         # Build result with inserted lines
         result_lines = list(lines)
-        # Insert in reverse order to maintain indices
-        result_lines.insert(insert_line_idx + 1, "")  # Blank line after heading
+        # Insert heading and blank line before EEO paragraph at its start index
         result_lines.insert(insert_line_idx, "## Equal Opportunity Employer")
+        result_lines.insert(insert_line_idx + 1, "")
 
-        return line_ending.join(result_lines)
+        # Reconstruct, preserving original trailing newline status
+        result = line_ending.join(result_lines)
+        if not has_trailing_newline and result.endswith(line_ending):
+            result = result[: -len(line_ending)]
+        elif has_trailing_newline and not result.endswith(line_ending):
+            result = result + line_ending
+        return result
 
     def _split_paragraphs_with_indices(self, lines: List[str]) -> Tuple[List[List[str]], List[int]]:
         """Split lines into paragraphs, tracking each paragraph's start index.

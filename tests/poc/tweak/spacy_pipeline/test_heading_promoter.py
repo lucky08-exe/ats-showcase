@@ -690,78 +690,79 @@ XYZ Corporation is an equal opportunity employer."""
 
 
 class TestHeadingPromoterDefectFixes:
-    """Tests for DEFECT 1, 2, 3 fixes (Issue #374)."""
+    """Exact-equality tests for DEFECT 1, 2, 3 fixes (Issue #374)."""
 
-    def test_blank_line_preservation_before_preceding_section(self) -> None:
-        """Blank lines in preceding sections are preserved (DEFECT 2 FIX)."""
+    def test_plain_trailing_eeo_exact(self) -> None:
+        """Plain trailing EEO: heading + blank inserted before EEO paragraph (DEFECT 2 FIX)."""
         promoter = HeadingPromoter()
-        text = """Role Overview
+        input_text = "More text here.\n\nAcme is an equal opportunity employer and does not discriminate."
+        expected = "More text here.\n\n## Equal Opportunity Employer\n\nAcme is an equal opportunity employer and does not discriminate."
+        result = promoter.process(input_text)
+        assert result == expected
 
-Description paragraph.
-
-
-
-Second section.
-
-Another section
-
-Content here.
-
-Equal Opportunity Employer
-
-We are an equal opportunity employer."""
-
-        result = promoter.process(text)
-
-        # Count blank lines in output (should match input)
-        input_blanks = text.count("\n\n")
-        output_blanks = result.count("\n\n")
-        assert output_blanks >= input_blanks, "Blank lines were collapsed"
-
-    def test_crlf_line_ending_preservation(self) -> None:
-        """CRLF line endings are preserved (DEFECT 2 FIX)."""
+    def test_eeo_with_ada_exact(self) -> None:
+        """EEO + ADA paragraph: ADA stays trailing inside EEO section (DEFECT 1 FIX)."""
         promoter = HeadingPromoter()
-        text = "Role Overview\r\nDetails.\r\n\r\nEqual Opportunity Employer\r\nText here."
+        input_text = "More text.\n\nAcme is an equal opportunity employer.\n\nIf you need accommodation, contact hr@acme.com for assistance."
+        expected = "More text.\n\n## Equal Opportunity Employer\n\nAcme is an equal opportunity employer.\n\nIf you need accommodation, contact hr@acme.com for assistance."
+        result = promoter.process(input_text)
+        assert result == expected
 
-        result = promoter.process(text)
-
-        # If input has CRLF, output should too (or at least not corrupt it)
-        # The key is that the logic works with split('\n')
-        assert "## Equal Opportunity Employer" in result
-        # Original paragraph structure should be preserved
-        assert "Details." in result
-
-    def test_without_regard_to_requires_protected_class_context(self) -> None:
-        """'without regard to' requires protected-class context, not generic phrases (DEFECT 3 FIX)."""
+    def test_eeo_with_ada_crlf_exact(self) -> None:
+        """EEO + ADA with CRLF: line endings preserved (DEFECT 2 FIX)."""
         promoter = HeadingPromoter()
-        # Benefits sentence with "without regard to tenure"
-        text = """Role Overview
+        input_text = "More text.\r\n\r\nAcme is an equal opportunity employer.\r\n\r\nIf you need accommodation, contact hr@acme.com for assistance."
+        expected = "More text.\r\n\r\n## Equal Opportunity Employer\r\n\r\nAcme is an equal opportunity employer.\r\n\r\nIf you need accommodation, contact hr@acme.com for assistance."
+        result = promoter.process(input_text)
+        assert result == expected
 
-Details.
+    def test_input_with_trailing_newline_exact(self) -> None:
+        """Input with trailing newline: preserved in output."""
+        promoter = HeadingPromoter()
+        input_text = "More text.\n\nAcme is an equal opportunity employer.\n"
+        expected = "More text.\n\n## Equal Opportunity Employer\n\nAcme is an equal opportunity employer.\n"
+        result = promoter.process(input_text)
+        assert result == expected
 
-Benefits
+    def test_multiple_blank_lines_preserved_exact(self) -> None:
+        """Multiple blank lines in earlier section: all preserved."""
+        promoter = HeadingPromoter()
+        input_text = "Section One.\n\n\n\nSection Two.\n\nAcme is an equal opportunity employer."
+        expected = "Section One.\n\n\n\nSection Two.\n\n## Equal Opportunity Employer\n\nAcme is an equal opportunity employer."
+        result = promoter.process(input_text)
+        assert result == expected
 
-Our benefits are offered without regard to tenure and include dental coverage."""
-
+    def test_benefits_without_regard_to_tenure_unchanged(self) -> None:
+        """Benefits with 'without regard to tenure': NOT detected as EEO (DEFECT 3 FIX)."""
+        promoter = HeadingPromoter()
+        text = "Our benefits are offered without regard to tenure and include dental coverage."
         result = promoter.process(text)
-
-        # Should NOT detect this as EEO (no protected class term)
         assert result.count("## Equal Opportunity Employer") == 0
-        # Benefits section should be promoted normally
-        assert "## Benefits" in result
+        assert result == text
 
-    def test_without_regard_to_with_protected_class_is_eeo(self) -> None:
-        """'without regard to' followed by protected-class term IS detected as EEO (DEFECT 3 FIX)."""
+    def test_mid_document_bullet_with_eeo_unchanged(self) -> None:
+        """EEO phrase in bullet list: not isolated (no real section after)."""
         promoter = HeadingPromoter()
-        text = """Role Overview
-
-Details.
-
-Equal Opportunity Employer
-
-We are an equal opportunity employer and make decisions without regard to race, color, or religion."""
-
+        text = "* Understanding of equal opportunity laws"
         result = promoter.process(text)
+        assert result.count("## Equal Opportunity Employer") == 0
+        assert result == text
 
-        # Should detect EEO (has protected classes)
-        assert "## Equal Opportunity Employer" in result
+    def test_eeo_followed_by_real_benefits_section_unchanged(self) -> None:
+        """EEO followed by real '## Benefits' section: no synthetic heading."""
+        promoter = HeadingPromoter()
+        input_text = "Acme is an equal opportunity employer.\n\nBenefits\n\nDental coverage."
+        # "Benefits" will be promoted to ##, not EEO synthetic heading
+        result = promoter.process(input_text)
+        assert result.count("## Equal Opportunity Employer") == 0
+        assert "## Benefits" in result
+        # But the EEO paragraph itself should be promoted if "Acme..." line is a known heading (it's not)
+        assert "Acme is an equal opportunity employer." in result
+
+    def test_idempotent_eeo_second_pass_equals_first(self) -> None:
+        """Idempotent: second pass equals first pass."""
+        promoter = HeadingPromoter()
+        text = "More text.\n\nEqual Opportunity Employer\n\nAcme is an equal opportunity employer."
+        result1 = promoter.process(text)
+        result2 = promoter.process(result1)
+        assert result1 == result2
