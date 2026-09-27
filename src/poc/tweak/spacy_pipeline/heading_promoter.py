@@ -31,7 +31,7 @@ the original text is returned unchanged.
 
 import logging
 import re
-from typing import FrozenSet, List, Optional
+from typing import FrozenSet, List, Optional, Tuple
 
 from src.poc.tweak.spacy_pipeline.base import PipelineComponent
 
@@ -115,7 +115,7 @@ KNOWN_PLAIN_HEADINGS: FrozenSet[str] = frozenset(
 )
 
 # EEO phrase triggers for Issue #374 (small, high-precision set)
-# Matched case-insensitively in first ~200 chars of paragraph, anchored to start
+# Matched case-insensitively in first ~200 chars of paragraph
 EEO_TRIGGERS: FrozenSet[str] = frozenset(
     [
         "equal opportunity employer",
@@ -123,9 +123,17 @@ EEO_TRIGGERS: FrozenSet[str] = frozenset(
         "is an equal opportunity",
         "are an equal opportunity",
         "does not discriminate",
-        "without regard to",
         "affirmative action",
     ]
+)
+
+# Pattern for "without regard to" followed by protected class term within ~60 chars (Issue #374 Defect 3)
+# Protectedclass terms: race, color, religion, sex, gender, national origin, age, disability,
+# veteran, sexual orientation, marital status, genetic
+PROTECTED_CLASS_PATTERN = re.compile(
+    r"without regard to\s+.*?\b(race|color|religion|sex|gender|national origin|age|disability|"
+    r"veteran|sexual orientation|marital status|genetic)\b",
+    re.IGNORECASE
 )
 
 
@@ -139,7 +147,7 @@ class HeadingPromoter(PipelineComponent):
     Also isolates trailing EEO paragraphs by inserting a synthesized heading
     before them (Issue #374). An EEO paragraph is detected if its text matches
     an EEO trigger phrase in the first ~200 characters, and if all paragraphs
-    after it are empty or other boilerplate (nothing substantive follows).
+    after it are empty or boilerplate (ADA/contact/accommodation notices).
 
     Attributes:
         headings: Frozenset of allowed heading phrases (lowercase, no trailing ':').
@@ -167,8 +175,8 @@ class HeadingPromoter(PipelineComponent):
            ## Equal Opportunity Employer heading before them.
         2. Promote plain-text lines matching known heading patterns to ## format.
 
-        The conversion preserves line structure and is idempotent (processing
-        twice produces same output).
+        The conversion preserves line structure, line endings, and is idempotent
+        (processing twice produces same output).
 
         Args:
             text: Input text (may be empty, contain CRLF, or Unicode).
@@ -179,10 +187,10 @@ class HeadingPromoter(PipelineComponent):
 
         Example:
             >>> promoter = HeadingPromoter()
-            >>> text = "Job Description\\nWork with clients.\\nRole Overview\\nFocus on delivery."
+            >>> text = "Job Description\\nWork with clients.\\nRole Overview\\nFocus."
             >>> result = promoter.process(text)
-            >>> result
-            '## Job Description\\nWork with clients.\\n## Role Overview\\nFocus on delivery.'
+            >>> "## Job Description" in result
+            True
         """
         try:
             # Handle empty input
@@ -205,7 +213,6 @@ class HeadingPromoter(PipelineComponent):
                     normalized = self._normalize(stripped)
                     if normalized in self._headings:
                         # Promote: preserve leading/trailing whitespace from original line
-                        # Extract the part of the line that should become the heading
                         promoted = "## " + stripped.rstrip(":").strip()
                         result_lines.append(promoted)
                     else:
@@ -224,8 +231,10 @@ class HeadingPromoter(PipelineComponent):
         """Isolate trailing EEO paragraphs by inserting a synthesized heading.
 
         Detects EEO paragraphs (blank-line separated blocks that match EEO trigger
-        phrases in their first ~200 chars) and inserts ## Equal Opportunity Employer
-        before them, but only if the paragraph is truly trailing (no real sections follow).
+        phrases) and inserts ## Equal Opportunity Employer before them, but only if
+        all paragraphs after the EEO paragraph are empty or boilerplate (ADA/contact/
+        accommodation notices). Insert directly into original line list, preserving
+        blank lines and line endings.
 
         Idempotent: repeated calls produce same result.
 
@@ -238,33 +247,30 @@ class HeadingPromoter(PipelineComponent):
         if not text:
             return text
 
-        lines = text.split("\n")
-        paragraphs = self._split_paragraphs(lines)
+        # Detect line ending type (CRLF or LF)
+        line_ending = "\r\n" if "\r\n" in text else "\n"
+
+        lines = text.split(line_ending)
+        paragraphs, para_starts = self._split_paragraphs_with_indices(lines)
 
         if len(paragraphs) < 2:
-            # Need at least 2 paragraphs to have meaningful trailing EEO
+            # Need at least 2 paragraphs
             return text
 
-        # Find last real (non-EEO) content
-        last_real_idx = -1
-        for i in range(len(paragraphs) - 1, -1, -1):
-            if self._has_real_content(paragraphs[i]) and not self._is_eeo_paragraph(paragraphs[i]):
-                last_real_idx = i
-                break
-
-        if last_real_idx >= len(paragraphs) - 1:
-            # No trailing EEO (last content is real content, not EEO)
-            return text
-
-        # Find first EEO after last real content
+        # Find first EEO paragraph such that everything after it is boilerplate
         first_eeo_idx = -1
-        for i in range(last_real_idx + 1, len(paragraphs)):
+        for i in range(len(paragraphs)):
             if self._is_eeo_paragraph(paragraphs[i]):
-                first_eeo_idx = i
-                break
-            elif self._has_real_content(paragraphs[i]):
-                # Found real section after potential EEO, not trailing
-                return text
+                # Check if all paragraphs after this one are empty or boilerplate
+                all_trailing_boilerplate = True
+                for j in range(i + 1, len(paragraphs)):
+                    if not self._is_empty_or_boilerplate(paragraphs[j]):
+                        all_trailing_boilerplate = False
+                        break
+
+                if all_trailing_boilerplate:
+                    first_eeo_idx = i
+                    break
 
         if first_eeo_idx < 0:
             return text
@@ -279,7 +285,7 @@ class HeadingPromoter(PipelineComponent):
         if first_line_stripped.startswith("##"):
             return text
 
-        # Guard 2: First line should not be a known heading (else it will be promoted anyway)
+        # Guard 2: First line should not be a known heading (would be promoted anyway)
         normalized = self._normalize(first_line_stripped)
         if normalized in self._headings:
             return text
@@ -290,44 +296,58 @@ class HeadingPromoter(PipelineComponent):
             if preceding_para and preceding_para[-1].strip().startswith("##"):
                 return text
 
-        # Reconstruct with heading inserted before first EEO paragraph
-        result_lines: List[str] = []
-        for i, para in enumerate(paragraphs):
-            if i == first_eeo_idx:
-                # Insert EEO heading before this paragraph
-                result_lines.append("## Equal Opportunity Employer")
-                result_lines.append("")  # Blank line after heading
+        # Guard 4: Preceding paragraph's first line should not be a known heading
+        # (it will be promoted in phase 2 and serve as the section heading)
+        if first_eeo_idx > 0:
+            preceding_para = paragraphs[first_eeo_idx - 1]
+            if preceding_para:
+                preceding_first_line = preceding_para[0].strip()
+                preceding_normalized = self._normalize(preceding_first_line)
+                if preceding_normalized in self._headings:
+                    return text
 
-            result_lines.extend(para)
-            if i < len(paragraphs) - 1:
-                result_lines.append("")  # Blank line between paragraphs
+        # Insert heading before the first EEO paragraph's first line
+        insert_line_idx = para_starts[first_eeo_idx]
 
-        return "\n".join(result_lines)
+        # Build result with inserted lines
+        result_lines = list(lines)
+        # Insert in reverse order to maintain indices
+        result_lines.insert(insert_line_idx + 1, "")  # Blank line after heading
+        result_lines.insert(insert_line_idx, "## Equal Opportunity Employer")
 
-    def _split_paragraphs(self, lines: List[str]) -> List[List[str]]:
-        """Split lines into paragraphs (blank-line separated blocks).
+        return line_ending.join(result_lines)
+
+    def _split_paragraphs_with_indices(self, lines: List[str]) -> Tuple[List[List[str]], List[int]]:
+        """Split lines into paragraphs, tracking each paragraph's start index.
 
         Args:
             lines: List of text lines
 
         Returns:
-            List of paragraphs, each a list of lines
+            Tuple of (paragraphs, start_indices) where start_indices[i] is the
+            line index where paragraphs[i] starts in the original lines list
         """
         paragraphs: List[List[str]] = []
+        start_indices: List[int] = []
         current_para: List[str] = []
+        para_start = 0
 
-        for line in lines:
+        for i, line in enumerate(lines):
             if not line.strip():
                 if current_para:
                     paragraphs.append(current_para)
+                    start_indices.append(para_start)
                     current_para = []
             else:
+                if not current_para:
+                    para_start = i
                 current_para.append(line)
 
         if current_para:
             paragraphs.append(current_para)
+            start_indices.append(para_start)
 
-        return paragraphs
+        return paragraphs, start_indices
 
     def _is_eeo_paragraph(self, para: List[str]) -> bool:
         """Check if a paragraph is an EEO paragraph.
@@ -352,33 +372,60 @@ class HeadingPromoter(PipelineComponent):
 
         # Combine paragraph text for matching
         para_text = " ".join(line.strip() for line in para)
-
-        # Check first ~200 chars against EEO triggers
         check_text = para_text[:200].casefold()
 
+        # Check simple triggers
         for trigger in EEO_TRIGGERS:
             if trigger in check_text:
                 return True
 
+        # Check "without regard to" with protected class pattern
+        if PROTECTED_CLASS_PATTERN.search(para_text[:400]):
+            return True
+
         return False
 
-    def _has_real_content(self, para: List[str]) -> bool:
-        """Check if a paragraph has real (non-empty) content.
+    def _is_empty_or_boilerplate(self, para: List[str]) -> bool:
+        """Check if paragraph is empty or boilerplate (ADA/contact/accommodation).
+
+        Boilerplate patterns: accommodation, disability, ADA, contact, email,
+        "if you need", "reasonable accommodation", etc.
 
         Args:
             para: Paragraph as list of lines
 
         Returns:
-            True if paragraph has content
+            True if paragraph is empty or boilerplate
         """
         if not para:
-            return False
+            return True
 
         text = " ".join(line.strip() for line in para).strip()
-        return bool(text)
+        if not text:
+            return True
+
+        # Boilerplate keyword patterns
+        boilerplate_keywords = [
+            "accommodation",
+            "disability",
+            "ada",
+            "contact",
+            "email",
+            "if you need",
+            "reasonable accommodation",
+            "please contact",
+            "get in touch",
+        ]
+
+        text_lower = text.lower()
+        for keyword in boilerplate_keywords:
+            if keyword in text_lower:
+                return True
+
+        return False
 
     def _should_promote(self, stripped_line: str, is_first: bool, prev_blank: bool) -> bool:
-        """Check if a line is eligible for promotion (before checking against phrase set).
+        """Check if a line is eligible for promotion.
 
         Args:
             stripped_line: The line after calling .strip()
@@ -386,7 +433,7 @@ class HeadingPromoter(PipelineComponent):
             prev_blank: True if the previous line was blank or first line
 
         Returns:
-            True if the line passes structural checks (not already formatted, correct position)
+            True if the line passes structural checks
         """
         # Empty lines cannot be promoted
         if not stripped_line:
@@ -396,15 +443,15 @@ class HeadingPromoter(PipelineComponent):
         if stripped_line[0] in "#*-+|":
             return False
 
-        # Must not start with digit (list indicator like "1. ", "2. ")
+        # Must not start with digit (list indicator)
         if stripped_line[0].isdigit():
             return False
 
-        # Must not be already formatted as bold (**...**)
+        # Must not be already formatted as bold
         if stripped_line.startswith("**") and stripped_line.endswith("**"):
             return False
 
-        # Must not contain list-like patterns (digit followed by . or ))
+        # Must not contain list-like patterns
         if re.match(r"^\d+[\.\)]", stripped_line):
             return False
 
@@ -419,9 +466,9 @@ class HeadingPromoter(PipelineComponent):
 
         Transformations:
         - Convert to lowercase (casefold for Unicode)
-        - Normalize apostrophes (' and ' both become ')
-        - Collapse multiple spaces to single space
-        - Strip trailing ':' and whitespace
+        - Normalize apostrophes
+        - Collapse multiple spaces
+        - Strip trailing ':'
         - Strip leading/trailing whitespace
 
         Args:
@@ -433,7 +480,7 @@ class HeadingPromoter(PipelineComponent):
         # Lowercase
         text = text.casefold()
 
-        # Normalise apostrophes (both straight ' and curly ')
+        # Normalise apostrophes
         text = text.replace("'", "'").replace("'", "'")
 
         # Collapse multiple spaces

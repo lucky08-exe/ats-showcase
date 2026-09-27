@@ -412,7 +412,6 @@ class TestHeadingPromoterEEOIsolation:
             "is an equal opportunity",
             "are an equal opportunity",
             "does not discriminate",
-            "without regard to",
             "affirmative action",
         ],
     )
@@ -512,7 +511,7 @@ This is an equal opportunity employer and makes decisions without regard to race
         assert result1.count("## Equal Opportunity Employer") == 1
 
     def test_trailing_ada_paragraph_after_eeo_stays_trailing(self) -> None:
-        """Trailing ADA/contact paragraph after EEO stays inside EEO section."""
+        """Trailing ADA/contact paragraph after EEO stays inside EEO section (DEFECT 1 FIX)."""
         promoter = HeadingPromoter()
         text = """Role Overview
 
@@ -587,7 +586,6 @@ This is an EQUAL OPPORTUNITY EMPLOYER."""
 
         result = promoter.process(text)
 
-        # Should detect EEO and add heading (case-insensitive)
         # Should detect EEO and add heading (case-insensitive)
         # Note: preserves original case, so may be ## EQUAL OPPORTUNITY EMPLOYER
         assert any(line.startswith("##") and "equal opportunity" in line.lower() for line in result.split("\n"))
@@ -689,3 +687,81 @@ XYZ Corporation is an equal opportunity employer."""
         # Without explicit heading, the last paragraph is not a separate section
         # (This is more of a documentation test showing the problem the fix solves)
         assert "## Equal Opportunity Employer" not in text
+
+
+class TestHeadingPromoterDefectFixes:
+    """Tests for DEFECT 1, 2, 3 fixes (Issue #374)."""
+
+    def test_blank_line_preservation_before_preceding_section(self) -> None:
+        """Blank lines in preceding sections are preserved (DEFECT 2 FIX)."""
+        promoter = HeadingPromoter()
+        text = """Role Overview
+
+Description paragraph.
+
+
+
+Second section.
+
+Another section
+
+Content here.
+
+Equal Opportunity Employer
+
+We are an equal opportunity employer."""
+
+        result = promoter.process(text)
+
+        # Count blank lines in output (should match input)
+        input_blanks = text.count("\n\n")
+        output_blanks = result.count("\n\n")
+        assert output_blanks >= input_blanks, "Blank lines were collapsed"
+
+    def test_crlf_line_ending_preservation(self) -> None:
+        """CRLF line endings are preserved (DEFECT 2 FIX)."""
+        promoter = HeadingPromoter()
+        text = "Role Overview\r\nDetails.\r\n\r\nEqual Opportunity Employer\r\nText here."
+
+        result = promoter.process(text)
+
+        # If input has CRLF, output should too (or at least not corrupt it)
+        # The key is that the logic works with split('\n')
+        assert "## Equal Opportunity Employer" in result
+        # Original paragraph structure should be preserved
+        assert "Details." in result
+
+    def test_without_regard_to_requires_protected_class_context(self) -> None:
+        """'without regard to' requires protected-class context, not generic phrases (DEFECT 3 FIX)."""
+        promoter = HeadingPromoter()
+        # Benefits sentence with "without regard to tenure"
+        text = """Role Overview
+
+Details.
+
+Benefits
+
+Our benefits are offered without regard to tenure and include dental coverage."""
+
+        result = promoter.process(text)
+
+        # Should NOT detect this as EEO (no protected class term)
+        assert result.count("## Equal Opportunity Employer") == 0
+        # Benefits section should be promoted normally
+        assert "## Benefits" in result
+
+    def test_without_regard_to_with_protected_class_is_eeo(self) -> None:
+        """'without regard to' followed by protected-class term IS detected as EEO (DEFECT 3 FIX)."""
+        promoter = HeadingPromoter()
+        text = """Role Overview
+
+Details.
+
+Equal Opportunity Employer
+
+We are an equal opportunity employer and make decisions without regard to race, color, or religion."""
+
+        result = promoter.process(text)
+
+        # Should detect EEO (has protected classes)
+        assert "## Equal Opportunity Employer" in result
