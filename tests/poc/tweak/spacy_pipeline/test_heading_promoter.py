@@ -696,23 +696,40 @@ class TestHeadingPromoterDefectFixes:
         """Plain trailing EEO: heading + blank inserted before EEO paragraph (DEFECT 2 FIX)."""
         promoter = HeadingPromoter()
         input_text = "More text here.\n\nAcme is an equal opportunity employer and does not discriminate."
-        expected = "More text here.\n\n## Equal Opportunity Employer\n\nAcme is an equal opportunity employer and does not discriminate."
+        expected = (
+            "More text here.\n\n## Equal Opportunity Employer\n\n"
+            "Acme is an equal opportunity employer and does not discriminate."
+        )
         result = promoter.process(input_text)
         assert result == expected
 
     def test_eeo_with_ada_exact(self) -> None:
         """EEO + ADA paragraph: ADA stays trailing inside EEO section (DEFECT 1 FIX)."""
         promoter = HeadingPromoter()
-        input_text = "More text.\n\nAcme is an equal opportunity employer.\n\nIf you need accommodation, contact hr@acme.com for assistance."
-        expected = "More text.\n\n## Equal Opportunity Employer\n\nAcme is an equal opportunity employer.\n\nIf you need accommodation, contact hr@acme.com for assistance."
+        input_text = (
+            "More text.\n\nAcme is an equal opportunity employer.\n\n"
+            "If you need accommodation, contact hr@acme.com for assistance."
+        )
+        expected = (
+            "More text.\n\n## Equal Opportunity Employer\n\n"
+            "Acme is an equal opportunity employer.\n\n"
+            "If you need accommodation, contact hr@acme.com for assistance."
+        )
         result = promoter.process(input_text)
         assert result == expected
 
     def test_eeo_with_ada_crlf_exact(self) -> None:
         """EEO + ADA with CRLF: line endings preserved (DEFECT 2 FIX)."""
         promoter = HeadingPromoter()
-        input_text = "More text.\r\n\r\nAcme is an equal opportunity employer.\r\n\r\nIf you need accommodation, contact hr@acme.com for assistance."
-        expected = "More text.\r\n\r\n## Equal Opportunity Employer\r\n\r\nAcme is an equal opportunity employer.\r\n\r\nIf you need accommodation, contact hr@acme.com for assistance."
+        input_text = (
+            "More text.\r\n\r\nAcme is an equal opportunity employer.\r\n\r\n"
+            "If you need accommodation, contact hr@acme.com for assistance."
+        )
+        expected = (
+            "More text.\r\n\r\n## Equal Opportunity Employer\r\n\r\n"
+            "Acme is an equal opportunity employer.\r\n\r\n"
+            "If you need accommodation, contact hr@acme.com for assistance."
+        )
         result = promoter.process(input_text)
         assert result == expected
 
@@ -728,7 +745,10 @@ class TestHeadingPromoterDefectFixes:
         """Multiple blank lines in earlier section: all preserved."""
         promoter = HeadingPromoter()
         input_text = "Section One.\n\n\n\nSection Two.\n\nAcme is an equal opportunity employer."
-        expected = "Section One.\n\n\n\nSection Two.\n\n## Equal Opportunity Employer\n\nAcme is an equal opportunity employer."
+        expected = (
+            "Section One.\n\n\n\nSection Two.\n\n## Equal Opportunity Employer"
+            "\n\nAcme is an equal opportunity employer."
+        )
         result = promoter.process(input_text)
         assert result == expected
 
