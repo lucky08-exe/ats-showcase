@@ -11,7 +11,7 @@ Issue #429. Covers the skills and technologies POC extractor tests.
 | **Total** | | **70** |
 
 - Requires spaCy model `en_core_web_md` (`uv run python -m spacy download en_core_web_md`).
-- Reported runtime: ~90s (not measured in this report).
+- Measured runtime: 70 passed in 98.21s (single local run, `uv run pytest ... -q`).
 - Fixture paths are relative (`tests/poc/fixtures/...`). Run from the repository root.
 
 Note: this document replaces the missing `tests/poc/TEST_SUMMARY.md` referenced in issue #268 comments. No such file exists under `tests/poc/`.
@@ -52,7 +52,7 @@ Note: this document replaces the missing `tests/poc/TEST_SUMMARY.md` referenced 
 | `fixture_what_you_ll_do` | both | function (default) | Reads `tests/poc/fixtures/raw_jd_what_you_ll_do.md`; returns `""` if missing |
 | `fixture_knowledge_skills` | both | function (default) | Reads `tests/poc/fixtures/raw_jd_knowledge_skills_abilities.md`; returns `""` if missing |
 
-Both fixture files exist (verified by glob). The fixture-dependent tests guard with `if not fixture: pytest.skip(...)`, so a missing file produces a skip, not a failure.
+Both fixture files exist (verified by glob). Most fixture-dependent tests guard with `if not fixture: pytest.skip(...)`, so a missing file produces a skip, not a failure. Exceptions with no guard: `test_fixture_combined_extraction` in both files, which run on empty strings if the files are missing.
 
 ## Coverage Gaps
 
@@ -65,7 +65,7 @@ Verified by reading the two test files and their imports.
 5. **Constructor error paths untested.** No test covers the `OSError` branch in `SkillExtractor.__init__` (invalid model name), or the `"entity_ruler" in nlp.pipe_names` reuse branch in `TechExtractor.__init__`.
 6. **Misnamed sorting test.** `TestSkillExtractorSorting::test_sorted_case_insensitive` does not test case-insensitive ordering. Its input is all lowercase.
 7. **Silent fixture skips.** Fixture helpers return `""` on a missing file, and the tests then skip. A rename of a fixture file would convert those tests into skips, not failures.
-8. **Wall-clock assertions.** `TestSkillExtractorPerformance::test_extraction_completes_quickly` asserts `elapsed < 1.0`. This can be flaky on slow hosts.
+8. **Wall-clock assertions.** `TestSkillExtractorPerformance::test_extraction_completes_quickly` asserts `elapsed < 1.0`; `TestTechExtractorPerformance::test_extraction_completes_quickly` asserts `elapsed < 0.1` (100 ms). Both can be flaky on slow hosts.
 
 ## Verification
 
