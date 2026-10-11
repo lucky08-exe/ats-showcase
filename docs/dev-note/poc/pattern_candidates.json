@@ -1,0 +1,56 @@
+{
+  "skill_verbs": [
+    {"term": "automate", "rationale": "Common JD verb for scripting and pipeline work."},
+    {"term": "collaborate", "rationale": "Frequent in soft-skill bullets; complements partner and communicate."},
+    {"term": "migrate", "rationale": "Common in platform and cloud job descriptions."},
+    {"term": "analyze", "rationale": "Common in data and research roles."},
+    {"term": "debug", "rationale": "Common in engineering bullets."},
+    {"term": "maintain", "rationale": "Common in ownership bullets; complements own."},
+    {"term": "refactor", "rationale": "Common in code-quality bullets."},
+    {"term": "monitor", "rationale": "Common in ops and reliability bullets."},
+    {"term": "coordinate", "rationale": "Common in cross-team and project bullets."},
+    {"term": "troubleshoot", "rationale": "Common in support and infrastructure bullets."}
+  ],
+  "tech_terms": {
+    "Carbon Robotics / AI / Robotics Specific": [
+      {"term": "opencv", "rationale": "Computer vision library; sits next to computer vision."},
+      {"term": "ros", "rationale": "Robotics middleware; fits the robotics group."},
+      {"term": "lidar", "rationale": "Sensor type; sits next to sensor fusion."},
+      {"term": "slam", "rationale": "Localization and mapping; robotics domain term."},
+      {"term": "deep learning", "rationale": "Multi-word ML umbrella term."}
+    ],
+    "Languages": [
+      {"term": "sql", "rationale": "Near-universal in data and backend JDs."},
+      {"term": "kotlin", "rationale": "Common JVM and mobile language."},
+      {"term": "scala", "rationale": "Common JVM and data-engineering language."},
+      {"term": "ruby", "rationale": "Common web language."},
+      {"term": "php", "rationale": "Common web language."}
+    ],
+    "Frameworks & Libraries": [
+      {"term": "fastapi", "rationale": "Common Python API framework; complements flask and django."},
+      {"term": "pandas", "rationale": "Common data library."},
+      {"term": "numpy", "rationale": "Common numeric library."},
+      {"term": "node.js", "rationale": "Common JavaScript runtime; dotted token, tokenization unverified."},
+      {"term": "graphql", "rationale": "Common API query language."}
+    ],
+    "Cloud & Infrastructure": [
+      {"term": "terraform", "rationale": "Common infrastructure-as-code tool."},
+      {"term": "ansible", "rationale": "Common configuration-management tool."},
+      {"term": "helm", "rationale": "Common Kubernetes package manager."},
+      {"term": "prometheus", "rationale": "Common metrics and monitoring tool."},
+      {"term": "kafka", "rationale": "Common event-streaming platform."}
+    ],
+    "Databases & Search": [
+      {"term": "mysql", "rationale": "Relational database; complements postgresql."},
+      {"term": "sqlite", "rationale": "Embedded database; used by this project's stack."},
+      {"term": "cassandra", "rationale": "Wide-column database."},
+      {"term": "dynamodb", "rationale": "AWS key-value database."}
+    ],
+    "Tools & Collaboration": [
+      {"term": "jenkins", "rationale": "CI server."},
+      {"term": "bitbucket", "rationale": "Git hosting; sits next to github and gitlab."},
+      {"term": "confluence", "rationale": "Wiki tool; sits next to jira."},
+      {"term": "github actions", "rationale": "Multi-word CI feature; sits next to github."}
+    ]
+  }
+}
