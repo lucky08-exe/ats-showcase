@@ -2,7 +2,7 @@
 
 Measures:
 (a) Model load time: spacy.load("en_core_web_md") and SkillExtractor construction.
-(b) Extraction latency at ~100 / ~1000 / ~5000 token inputs (min/median/max ms).
+(b) Extraction latency at target sizes ~100 / ~1000 / ~5000 tokens (actual counts reported) (min/median/max ms).
     Tech path is split into nlp(text) parse time and TechExtractor.extract(doc) time.
 (c) Peak tracemalloc memory per input size.
 
@@ -221,7 +221,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     except OSError as exc:
-        print(f"error: {exc} (is spaCy model '{MODEL_NAME}' installed?)", file=sys.stderr)
+        print(f"error: {exc}", file=sys.stderr)
         return 1
 
     if args.table:

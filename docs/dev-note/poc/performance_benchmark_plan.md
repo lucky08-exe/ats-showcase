@@ -13,7 +13,7 @@ Script: `scripts/benchmark_poc_extraction.py`
 - `SkillExtractor(model_name="en_core_web_md")` construction: `--repeats` calls (min/median/max). Each construction loads its own spaCy pipeline.
 
 **(b) Extraction latency** at three input sizes (min/median/max ms over `--repeats` calls, one untimed warm-up call first):
-- Sizes: small (~100 tokens), medium (~1000), large (~5000). Built by repeating the two POC fixtures (`tests/poc/fixtures/raw_jd_what_you_ll_do.md`, `tests/poc/fixtures/raw_jd_knowledge_skills_abilities.md`). Actual token counts are reported.
+- Sizes (targets): small (~100), medium (~1000), large (~5000); actual counts differ, see caveats. Built by repeating the two POC fixtures (`tests/poc/fixtures/raw_jd_what_you_ll_do.md`, `tests/poc/fixtures/raw_jd_knowledge_skills_abilities.md`). Actual token counts are reported.
 - Skill: `SkillExtractor.extract(text)`. Includes its internal spaCy parse.
 - Tech: `nlp(text)` parse time and `TechExtractor.extract(doc)` time, reported separately.
 
@@ -41,7 +41,7 @@ uv run python scripts/benchmark_poc_extraction.py [--table] [--repeats N]
 Requirements:
 - `en_core_web_md` installed: `uv run python -m spacy download en_core_web_md`
 - Both fixture files present under `tests/poc/fixtures/`. Missing fixtures exit with code 1 and a message on stderr.
-- Missing spaCy model exits with code 1 and a message on stderr.
+- Any `OSError` (including spaCy's missing-model error) exits with code 1 and the exception text on stderr.
 
 Output JSON keys: `model`, `repeats`, `model_load` (`spacy_load_cold_ms`, `spacy_load_ms` {min_ms, median_ms, max_ms}, `skill_extractor_init_ms` {min_ms, median_ms, max_ms}), `sizes` (per label: `target_tokens`, `tokens`, `chars`, `skill_extract_ms`, `tech_parse_ms`, `tech_extract_ms`, `skill_peak_bytes`, `tech_parse_plus_extract_peak_bytes`).
 
