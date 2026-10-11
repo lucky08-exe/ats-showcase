@@ -51,6 +51,7 @@ def test_output_sorted_and_deduplicated(adapter: CombinedExtractor) -> None:
     for key in ("skills", "technologies"):
         values = result[key]
         assert values == sorted(set(values))
+        assert all(v == v.lower() for v in values)
 
 
 def test_empty_string_returns_empty_lists(adapter: CombinedExtractor) -> None:
@@ -91,3 +92,4 @@ def test_output_matches_expected_schema_structure(adapter: CombinedExtractor) ->
         if prop.get("uniqueItems"):
             assert len(values) == len(set(values))
         assert values == sorted(values)
+        assert all(v == v.lower() for v in values)

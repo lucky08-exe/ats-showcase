@@ -27,9 +27,9 @@ def _normalize(items: list[str]) -> list[str]:
         items: Raw extractor output.
 
     Returns:
-        Sorted list of unique strings, non-string items dropped.
+        Sorted list of unique lowercase strings, non-string items dropped.
     """
-    return sorted({item for item in items if isinstance(item, str)})
+    return sorted({item.lower() for item in items if isinstance(item, str)})
 
 
 class CombinedExtractor:
