@@ -149,6 +149,7 @@ exclude = ["build/", "dist/"]
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false
+check_untyped_defs = true
 
 [tool.coverage.run]
 source = ["src"]

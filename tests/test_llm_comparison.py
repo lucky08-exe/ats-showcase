@@ -271,6 +271,7 @@ def test_model_comparison(tmp_path):
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         pytest.skip("ANTHROPIC_API_KEY not set")
+    assert api_key is not None  # narrow str | None for mypy when pytest is untyped (pre-commit env)
 
     # Load real data
     print("Loading CV and job chunks...")
