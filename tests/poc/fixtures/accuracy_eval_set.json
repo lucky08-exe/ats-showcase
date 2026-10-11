@@ -2,49 +2,87 @@
   {
     "id": "s1",
     "text": "Deploy computer vision models on AWS and Kubernetes.",
-    "expected_skills": ["deploy computer vision models"],
-    "expected_technologies": ["aws", "computer vision", "kubernetes"]
+    "expected_skills": [
+      "deploy computer vision models"
+    ],
+    "expected_technologies": [
+      "aws",
+      "computer vision",
+      "kubernetes"
+    ]
   },
   {
     "id": "s2",
     "text": "Manage Kafka clusters on GCP and ship Terraform modules for the platform team.",
-    "expected_skills": ["manage kafka clusters", "ship terraform modules"],
-    "expected_technologies": ["gcp", "kafka", "terraform"]
+    "expected_skills": [
+      "manage kafka clusters",
+      "ship terraform modules"
+    ],
+    "expected_technologies": [
+      "gcp",
+      "kafka",
+      "terraform"
+    ]
   },
   {
     "id": "s3",
     "text": "Mentor junior engineers and define best practices for PyTorch model evaluation.",
-    "expected_skills": ["define best practices", "mentor junior engineers"],
-    "expected_technologies": ["pytorch"]
+    "expected_skills": [
+      "define best practices",
+      "mentor junior engineers"
+    ],
+    "expected_technologies": [
+      "pytorch"
+    ]
   },
   {
     "id": "s4",
     "text": "No experience with Kubernetes required. Strong Python skills are a must.",
     "expected_skills": [],
-    "expected_technologies": ["python"]
+    "expected_technologies": [
+      "python"
+    ]
   },
   {
     "id": "s5",
     "text": "Hands-on experience with anchor-free detectors and vision transformers is a plus.",
     "expected_skills": [],
-    "expected_technologies": ["anchor-free detectors", "vision transformers"]
+    "expected_technologies": [
+      "anchor-free detectors",
+      "vision transformers"
+    ]
   },
   {
     "id": "s6",
     "text": "Lead data science and platform teams building services in Python and Docker.",
-    "expected_skills": ["building services", "lead data science teams", "lead platform teams"],
-    "expected_technologies": ["docker", "python"]
+    "expected_skills": [
+      "building services",
+      "lead data science and platform teams"
+    ],
+    "expected_technologies": [
+      "docker",
+      "python"
+    ]
   },
   {
     "id": "s7",
     "text": "Go beyond the basics and own the roadmap for Redis caching.",
-    "expected_skills": ["own roadmap"],
-    "expected_technologies": ["redis"]
+    "expected_skills": [
+      "own the roadmap"
+    ],
+    "expected_technologies": [
+      "redis"
+    ]
   },
   {
     "id": "s8",
     "text": "Research novel retrieval methods and evaluate them with PyTorch Lightning.",
-    "expected_skills": ["research novel retrieval methods"],
-    "expected_technologies": ["pytorch", "pytorch lightning"]
+    "expected_skills": [
+      "research novel retrieval methods"
+    ],
+    "expected_technologies": [
+      "pytorch",
+      "pytorch lightning"
+    ]
   }
 ]

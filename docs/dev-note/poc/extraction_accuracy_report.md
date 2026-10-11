@@ -10,7 +10,7 @@ The previously reported 78% / 82% figures were computed on only 2 fixtures (`raw
 
 Ground truth labeling rules:
 - Lowercased, sorted, deduplicated.
-- Skill labels are surface spans as written in the text (matcher outputs surface form, not lemma), with leading determiners dropped (ideal output).
+- Skill labels are surface spans exactly as written in the text, including any determiner inside the span (matcher outputs surface form, not lemma). Labels are the full phrase an ideal extractor would take.
 - Technology labels are the terms a perfect extractor should return, including terms outside `TECH_TERMS`.
 
 Run both extractors over the JSON. Both extractors return sorted lists of lowercased strings.
@@ -66,11 +66,10 @@ Matching is exact string equality on lowercased strings. Aggregation across snip
 Justified from reading `patterns.py` and the matcher code. Not verified by running.
 
 **Skills (`extract_skills_a.py`)**
-- FN, determiner in span: matcher allows an optional `DET`/`ADP`/`PART` token and `span.text` includes it. "own the roadmap" is emitted, not "own roadmap" (s7).
-- FN, truncation at conjunction: the noun group is `ADJ/NOUN/PROPN` only, so the span stops at `and`. "lead data science and platform teams" yields "lead data science"; the second conjunct is never matched (s6).
+- FN, truncation at conjunction: the noun group is `ADJ/NOUN/PROPN` only, so the span stops at `and`. "lead data science and platform teams" yields "lead data science"; the second conjunct is never matched (s6). Observed with `en_core_web_md`: sentence-initial `Lead` is tagged `VERB`, so the truncation is reproducible; the label is the full phrase "lead data science and platform teams".
 - FN, truncation at punctuation or hyphen: `-`, `,`, `.` are not in the noun group, so spans stop there.
 - FN, verb not in `SKILL_VERBS`: `manage`, `ship`, `evaluate`, `collaborate` never match (s2, s8).
-- FN, inflection: output is surface form. "building services" is emitted (lemma `build` is in the list), so exact-match against "build services" fails (s6).
+- Labeling convention, inflection: output is surface form ("building services", not lemma form "build services"), and labels follow the same convention (s6). Comparing against lemma-form labels would count a spurious miss.
 - FN, sentence-initial imperative mis-tagged as NOUN: matches require spaCy `POS == VERB`. Observed with `en_core_web_md` during review of this PR: `Mentor` (s3) and `Research` (s8) are tagged `NOUN` at sentence start, so `mentor junior engineers` and `research novel retrieval methods` are not extracted although both lemmas are in `SKILL_VERBS`. Gerunds (`building`, s6) did match. Observation from one ad-hoc run; it is not a recorded result in the table below.
 
 **Technologies (`extract_technologies_a.py`)**
