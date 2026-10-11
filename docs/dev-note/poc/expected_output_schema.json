@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ats-playground.local/schemas/poc/expected_output_schema.json",
+  "title": "POC combined extractor output",
+  "description": "Combined output of the POC skills and technologies extractors. Each extractor's extract() returns a sorted list[str]: SkillExtractor.extract(text) (src/poc/skills/extract_skills_a.py) takes raw text, and TechExtractor.extract(doc) (src/poc/technologies/extract_technologies_a.py) takes a spaCy Doc, not raw text. Both return sorted, deduplicated, lowercase strings, and both return an empty list on pipeline or matcher error. Invariants that JSON Schema cannot express are stated in the field descriptions: every array is sorted ascending (case-insensitive; all values are lowercase, so plain string order applies), and contains no duplicates.",
+  "type": "object",
+  "properties": {
+    "skills": {
+      "type": "array",
+      "description": "Skill phrases from SkillExtractor.extract(text). Must be sorted ascending case-insensitively, all lowercase, and deduplicated. May be empty.",
+      "items": {
+        "type": "string",
+        "description": "Lowercase skill phrase, produced by span.text.replace('\\n', ' ').strip().lower()."
+      },
+      "uniqueItems": true
+    },
+    "technologies": {
+      "type": "array",
+      "description": "Technology names from TechExtractor.extract(doc). Must be sorted ascending case-insensitively, all lowercase, and deduplicated. May be empty.",
+      "items": {
+        "type": "string",
+        "description": "Lowercase technology name, taken from TECH entity text."
+      },
+      "uniqueItems": true
+    }
+  },
+  "required": ["skills", "technologies"],
+  "additionalProperties": false
+}
