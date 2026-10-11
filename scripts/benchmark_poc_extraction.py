@@ -89,12 +89,17 @@ def warm_then_time(fn: Callable[[], Any], repeats: int) -> dict[str, float]:
 
 def peak_bytes(fn: Callable[[], Any]) -> int:
     """Return tracemalloc peak bytes allocated while running fn once."""
-    tracemalloc.start()
+    started_here = not tracemalloc.is_tracing()
+    if started_here:
+        tracemalloc.start()
+    else:
+        tracemalloc.reset_peak()
     try:
         fn()
         _, peak = tracemalloc.get_traced_memory()
     finally:
-        tracemalloc.stop()
+        if started_here:
+            tracemalloc.stop()
     return peak
 
 
@@ -216,7 +221,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     except OSError as exc:
-        print(f"error: spaCy model '{MODEL_NAME}' unavailable: {exc}", file=sys.stderr)
+        print(f"error: {exc} (is spaCy model '{MODEL_NAME}' installed?)", file=sys.stderr)
         return 1
 
     if args.table:

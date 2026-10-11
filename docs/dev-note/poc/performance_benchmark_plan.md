@@ -43,7 +43,7 @@ Requirements:
 - Both fixture files present under `tests/poc/fixtures/`. Missing fixtures exit with code 1 and a message on stderr.
 - Missing spaCy model exits with code 1 and a message on stderr.
 
-Output JSON keys: `model`, `repeats`, `model_load` (`spacy_load_cold_ms`, `spacy_load_ms`, `skill_extractor_init_ms`), `sizes` (per label: `target_tokens`, `tokens`, `chars`, `skill_extract_ms`, `tech_parse_ms`, `tech_extract_ms`, `skill_peak_bytes`, `tech_parse_plus_extract_peak_bytes`).
+Output JSON keys: `model`, `repeats`, `model_load` (`spacy_load_cold_ms`, `spacy_load_ms` {min_ms, median_ms, max_ms}, `skill_extractor_init_ms` {min_ms, median_ms, max_ms}), `sizes` (per label: `target_tokens`, `tokens`, `chars`, `skill_extract_ms`, `tech_parse_ms`, `tech_extract_ms`, `skill_peak_bytes`, `tech_parse_plus_extract_peak_bytes`).
 
 ---
 
@@ -54,7 +54,7 @@ Output JSON keys: `model`, `repeats`, `model_load` (`spacy_load_cold_ms`, `spacy
 | Model load (`spacy.load("en_core_web_md")`), cold | < 2 s (2000 ms) |
 | Extraction per ~1000-token doc | < 100 ms |
 
-Compare the `spacy_load_cold_ms` value against the load target. Compare the medium-size latency (median) against the extraction target. Apply the extraction target to the skill and tech-parse-plus-extract paths.
+Compare the `spacy_load_cold_ms` value against the load target. Compare the medium-size median against the extraction target, using the measured token count in the `Tokens` column (medium is not exactly 1000 tokens). Skill path: `skill_extract_ms`. Tech path: sum of the `tech_parse_ms` and `tech_extract_ms` medians (they are timed separately). No pass/fail is computed; the comparison is manual.
 
 ---
 
@@ -63,7 +63,7 @@ Compare the `spacy_load_cold_ms` value against the load target. Compare the medi
 - **spaCy parse dominates.** Both extractors spend most time in `nlp(text)`. `TechExtractor.extract(doc)` is a loop over `doc.ents`, so the tech extraction row is small by comparison. Read the `tech_parse_ms` row as the main cost.
 - **tracemalloc undercounts native memory.** It only traces Python-level allocations routed through the Python allocator. Memory allocated directly by Cython/C code inside spaCy (and vector data) may be missing from the peak. Treat peak values as lower bounds.
 - **"Cold" is per process, not per OS.** The cold load is the first `spacy.load` in the script. The OS file cache may still be warm. Warm repeats are in-process only.
-- **Small size is not ~100 tokens.** Inputs are whole repeats of the fixtures, so the smallest input is one fixture pass (~379 tokens in a trial run), not ~100. The `Tokens` column is authoritative.
+- **Small size is not ~100 tokens.** Inputs are whole repeats of the fixtures, so the smallest input is one fixture pass, which is more than ~100. The `Tokens` column is authoritative.
 - **Warm-up call excluded.** Each extraction measurement runs one untimed call before the timed repeats.
 - **Timer.** `time.perf_counter()` for all latency values.
 - **Single-machine numbers.** Results depend on CPU, Python build, and spaCy version. Compare runs on the same machine only.
@@ -87,20 +87,20 @@ All result cells are placeholders until the benchmark is run. No values have bee
 
 | Size | Tokens | Metric | min (ms) | median (ms) | max (ms) |
 |------|--------|--------|----------|-------------|----------|
-| small (~100) | PENDING-RUN | `SkillExtractor.extract` | PENDING-RUN | PENDING-RUN | PENDING-RUN |
-| small (~100) | PENDING-RUN | Tech `nlp(text)` parse | PENDING-RUN | PENDING-RUN | PENDING-RUN |
-| small (~100) | PENDING-RUN | Tech `extract(doc)` | PENDING-RUN | PENDING-RUN | PENDING-RUN |
-| medium (~1000) | PENDING-RUN | `SkillExtractor.extract` | PENDING-RUN | PENDING-RUN | PENDING-RUN |
-| medium (~1000) | PENDING-RUN | Tech `nlp(text)` parse | PENDING-RUN | PENDING-RUN | PENDING-RUN |
-| medium (~1000) | PENDING-RUN | Tech `extract(doc)` | PENDING-RUN | PENDING-RUN | PENDING-RUN |
-| large (~5000) | PENDING-RUN | `SkillExtractor.extract` | PENDING-RUN | PENDING-RUN | PENDING-RUN |
-| large (~5000) | PENDING-RUN | Tech `nlp(text)` parse | PENDING-RUN | PENDING-RUN | PENDING-RUN |
-| large (~5000) | PENDING-RUN | Tech `extract(doc)` | PENDING-RUN | PENDING-RUN | PENDING-RUN |
+| small (target ~100) | PENDING-RUN | `SkillExtractor.extract` | PENDING-RUN | PENDING-RUN | PENDING-RUN |
+| small (target ~100) | PENDING-RUN | Tech `nlp(text)` parse | PENDING-RUN | PENDING-RUN | PENDING-RUN |
+| small (target ~100) | PENDING-RUN | Tech `extract(doc)` | PENDING-RUN | PENDING-RUN | PENDING-RUN |
+| medium (target ~1000) | PENDING-RUN | `SkillExtractor.extract` | PENDING-RUN | PENDING-RUN | PENDING-RUN |
+| medium (target ~1000) | PENDING-RUN | Tech `nlp(text)` parse | PENDING-RUN | PENDING-RUN | PENDING-RUN |
+| medium (target ~1000) | PENDING-RUN | Tech `extract(doc)` | PENDING-RUN | PENDING-RUN | PENDING-RUN |
+| large (target ~5000) | PENDING-RUN | `SkillExtractor.extract` | PENDING-RUN | PENDING-RUN | PENDING-RUN |
+| large (target ~5000) | PENDING-RUN | Tech `nlp(text)` parse | PENDING-RUN | PENDING-RUN | PENDING-RUN |
+| large (target ~5000) | PENDING-RUN | Tech `extract(doc)` | PENDING-RUN | PENDING-RUN | PENDING-RUN |
 
 ### Peak memory (tracemalloc)
 
 | Size | Tokens | Skill peak (bytes) | Tech parse + extract peak (bytes) |
 |------|--------|--------------------|-----------------------------------|
-| small (~100) | PENDING-RUN | PENDING-RUN | PENDING-RUN |
-| medium (~1000) | PENDING-RUN | PENDING-RUN | PENDING-RUN |
-| large (~5000) | PENDING-RUN | PENDING-RUN | PENDING-RUN |
+| small (target ~100) | PENDING-RUN | PENDING-RUN | PENDING-RUN |
+| medium (target ~1000) | PENDING-RUN | PENDING-RUN | PENDING-RUN |
+| large (target ~5000) | PENDING-RUN | PENDING-RUN | PENDING-RUN |
