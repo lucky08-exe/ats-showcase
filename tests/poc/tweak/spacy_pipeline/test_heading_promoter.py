@@ -1372,3 +1372,27 @@ class TestEEOFirstSentenceCandidacy:
         result = promoter.process(text)
         assert result == expected
         assert promoter.process(result) == result
+
+    @pytest.mark.parametrize(
+        "job_line",
+        [
+            "Request accommodation from the hiring manager.",
+            "Request accommodations for travel.",
+            "Book accommodations to request approval.",
+        ],
+    )
+    def test_travel_booking_accommodation_wording_is_boilerplate_known_limitation(self, job_line: str) -> None:
+        """Known limitation (accepted): travel/booking 'accommodation' wording is treated as boilerplate.
+
+        ACCOMMODATION_REQUEST_PATTERN cannot tell an accommodation notice from a booking request, so
+        these job-like lines isolate the preceding EEO sentence. The test pins the current behaviour;
+        it is not a statement that these lines are boilerplate.
+        """
+        promoter = HeadingPromoter()
+        text = f"More text.\n\nAcme is an equal opportunity employer.\n\n{job_line}"
+        expected = (
+            f"More text.\n\n## Equal Opportunity Employer\n\nAcme is an equal opportunity employer.\n\n{job_line}"
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result

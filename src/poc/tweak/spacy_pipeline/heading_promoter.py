@@ -186,6 +186,10 @@ BOILERPLATE_WORD_PATTERN = re.compile(
 # (e.g. "If you require accommodation, let us know.").
 # Residual risk: the "require" alternative also matches job content such as "Candidates may require
 # accommodation of shift hours." and treats that sentence as boilerplate.
+# Known false positives (accepted): the "request(ed) [a] accommodation" alternative matches travel and
+# booking wording such as "Request accommodation from the hiring manager." or "Request accommodations
+# for travel.", and "accommodations ... to request" matches "Book accommodations to request approval.".
+# These are pinned as isolated in test_travel_booking_accommodation_wording_is_boilerplate_known_limitation.
 ACCOMMODATION_REQUEST_PATTERN = re.compile(
     r"\baccommodations?\b[^.!?]{0,60}\b(?:on|upon|to)\s+request\w*|"
     r"\brequest\w*\s+(?:a\s+)?(?:reasonable\s+)?accommodations?\b|"
