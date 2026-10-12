@@ -211,11 +211,13 @@ BOILERPLATE_WORD_PATTERN = re.compile(
 # Also "accommodation request(s) can/may/should/will be made|submitted|sent|directed" (e.g.
 # "Accommodation requests can be made through HR."), "if/should you require ... accommodation(s)"
 # (e.g. "If you require accommodation, let us know.") and a notice lead-in "applicants/candidates/
-# individuals/persons/those who/whom require ... accommodation(s)" (e.g. "Applicants who require
-# accommodation in the application process will be supported."). The lead-in is limited to people who
-# apply, so job content such as "Engineers who require accommodations for travel." is not matched, and
-# the bare "require ... accommodation(s)" wording is not matched either: "The role may require
-# accommodations for travel." is job content.
+# individuals/persons/those/anyone/people/someone/all who/whom require ... accommodation(s)" (e.g.
+# "Applicants who require accommodation in the application process will be supported."). The lead-in is
+# a closed list of generic people words, so job content such as "Engineers who require accommodations for
+# travel." is not matched, and the bare "require ... accommodation(s)" wording is not matched either:
+# "The role may require accommodations for travel." is job content.
+# Known limitation: the generic lead-ins "all" and "people" also match job wording such as "All who
+# require accommodations for travel."
 # Known false positives (accepted): the "request(ed) [a] accommodation" alternative matches travel and
 # booking wording such as "Request accommodation from the hiring manager." or "Request accommodations
 # for travel.", and "accommodations ... to request" matches "Book accommodations to request approval.".
