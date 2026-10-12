@@ -130,13 +130,13 @@ EEO_TRIGGERS: FrozenSet[str] = frozenset(
     ]
 )
 
-# Pattern for "without regard to" followed by protected class term within ~60 chars (Issue #374 Defect 3)
-# Protectedclass terms: race, color, religion, sex, gender, national origin, age, disability,
-# veteran, sexual orientation, marital status, genetic
 # Markdown heading prefix (Issue #374). Stripped before the known-heading check in Guard 4 so
 # that a line already promoted to "## Benefits" by an earlier pass still matches "benefits".
 HEADING_PREFIX_PATTERN = re.compile(r"^#{1,6}\s+")
 
+# "without regard to" followed by a protected-class term within ~60 chars (Issue #374 Defect 3).
+# Protected-class terms: race, color, religion(s)/religious, sex, gender, national origin, age,
+# disability/disabilities, veteran(s), sexual orientation, marital status, genetic(s).
 PROTECTED_CLASS_PATTERN = re.compile(
     r"without regard to\s+.{0,60}?\b(race|color|religions?|religious|sex|gender|national origin|age|"
     r"disabilit(?:y|ies)|veterans?|sexual orientation|marital status|genetics?)\b",
@@ -170,8 +170,10 @@ class HeadingPromoter(PipelineComponent):
 
     Also isolates trailing EEO paragraphs by inserting a synthesized heading
     before them (Issue #374). An EEO paragraph is detected if its text matches
-    an EEO trigger phrase in the first ~200 characters, and if all paragraphs
-    after it are empty or boilerplate (ADA/contact/accommodation notices).
+    an EEO trigger phrase in the first ~200 characters, or "without regard to"
+    followed by a protected-class term within ~60 characters, inside the first
+    ~400 characters. It is isolated only if every paragraph after it is empty,
+    boilerplate (ADA/contact/accommodation notices), or another EEO paragraph.
 
     Attributes:
         headings: Frozenset of allowed heading phrases (lowercase, no trailing ':').
@@ -320,18 +322,19 @@ class HeadingPromoter(PipelineComponent):
         if not eeo_para:
             return text
 
-        # Guard 1: First line should not already be a heading
+        # Guard 1 (defensive): the first line should not already be a "##" heading. This is
+        # currently unreachable: _is_eeo_paragraph rejects paragraphs whose first line starts
+        # with '#', so an EEO paragraph can never start with "##". Kept in case that changes.
         first_line_stripped = eeo_para[0].strip()
         if first_line_stripped.startswith("##"):
             return text
 
         # Guard 2 (silent skip): the EEO paragraph's first line is itself a known heading
-        # phrase, e.g. "Equal Opportunity Employer" written directly above the sentence.
-        # Phase 2 promotes that line to "## ..." on its own, so inserting a synthetic
-        # heading here would produce two headings for one block. Return unchanged.
-        # Reachable only when the heading line shares a paragraph with the EEO sentence
-        # (no blank line between them); a standalone heading line is a separate paragraph
-        # and is handled by Guard 4 / plain promotion instead.
+        # phrase, e.g. "Equal Opportunity Employer". Such a line matches the EEO trigger, so
+        # it is the EEO paragraph itself, whether or not a sentence follows it in the same
+        # paragraph. Phase 2 promotes that line to "## ..." on its own, so a synthetic heading
+        # would give two headings for one block. Return unchanged; the outcome is plain
+        # promotion of the existing line.
         normalized = self._normalize(first_line_stripped)
         if normalized in self._headings:
             return text
