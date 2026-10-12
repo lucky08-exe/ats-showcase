@@ -531,7 +531,9 @@ class HeadingPromoter(PipelineComponent):
         if BOILERPLATE_WORD_PATTERN.search(text):
             return True
 
-        if ACCOMMODATION_REQUEST_PATTERN.search(text) or ACCOMMODATION_LABEL_PATTERN.fullmatch(text):
+        # Strip a markdown heading marker so "## Accommodations" counts as a bare label.
+        label_text = HEADING_PREFIX_PATTERN.sub("", text).strip()
+        if ACCOMMODATION_REQUEST_PATTERN.search(text) or ACCOMMODATION_LABEL_PATTERN.fullmatch(label_text):
             return True
 
         text_lower = text.lower()

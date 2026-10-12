@@ -1182,6 +1182,24 @@ class TestEEOAccommodationBoilerplate:
         assert result == expected
         assert promoter.process(result) == result
 
+    def test_heading_marked_accommodations_label_is_boilerplate(self) -> None:
+        """A '## Accommodations' heading is a bare label once its marker is stripped; EEO is isolated."""
+        promoter = HeadingPromoter()
+        text = (
+            "More text.\n\nAcme is an equal opportunity employer.\n\n"
+            "## Accommodations\n\n"
+            "If you need accommodations, please contact us."
+        )
+        expected = (
+            "More text.\n\n## Equal Opportunity Employer\n\n"
+            "Acme is an equal opportunity employer.\n\n"
+            "## Accommodations\n\n"
+            "If you need accommodations, please contact us."
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result
+
 
 class TestEEOAdaCaseSensitivity:
     """The ADA token is uppercase-only, so the language 'Ada' is not boilerplate (Issue #374)."""
