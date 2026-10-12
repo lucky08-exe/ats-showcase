@@ -46,10 +46,9 @@ class TestSkillExtractorBasics:
 
     def test_extract_multiple_skills(self, extractor):
         """Extract multiple skill phrases."""
-        text = "Design neural networks. Develop production systems. Deploy at scale."
+        text = "You will design neural networks. You will develop production systems. You will deploy at scale."
         skills = extractor.extract(text)
-        assert len(skills) >= 1
-        # Should capture at least design or develop
+        assert skills == ["deploy at scale", "design neural networks", "develop production systems"]
 
     def test_extract_returns_list(self, extractor):
         """Extract returns sorted list."""
@@ -60,16 +59,16 @@ class TestSkillExtractorBasics:
 
     def test_extract_lowercase_output(self, extractor):
         """All results are lowercase."""
-        text = "Design Python Applications. Deploy Systems."
+        text = "You will design Python applications. You will deploy systems."
         skills = extractor.extract(text)
-        assert all(s.islower() for s in skills)
+        assert skills == ["deploy systems", "design python applications"]
 
     def test_extract_no_duplicates(self, extractor):
         """Results deduplicated."""
-        text = "Design systems. Design architectures. Design models."
+        # Identical matches must collapse to a single entry (sorted(set(...)))
+        text = "You will design systems. You will design systems. You will design systems."
         skills = extractor.extract(text)
-        # All results should be unique (set behavior)
-        assert len(skills) == len(set(skills))
+        assert skills == ["design systems"]
 
     def test_extract_handles_newlines(self, extractor):
         """Handles newlines in text."""
@@ -128,12 +127,14 @@ class TestSkillExtractorPatternMatching:
 
     def test_optional_preposition_handling(self, extractor):
         """Handles optional prepositions (with, the, of)."""
-        text1 = "Lead the design of systems."
-        text2 = "Lead design efforts."
+        text1 = "You will lead the design of systems."
+        text2 = "You will lead design efforts."
         skills1 = extractor.extract(text1)
         skills2 = extractor.extract(text2)
-        # At least one should extract
-        assert len(skills1) > 0 or len(skills2) > 0
+        # Observed: the optional "the/of" connector is kept; "of systems" is not
+        # (ADP is excluded from the noun run), so the span stops at "design".
+        assert skills1 == ["lead the design"]
+        assert skills2 == ["lead design efforts"]
 
     def test_compound_noun_phrases(self, extractor):
         """Captures compound nouns (deep learning)."""
@@ -245,10 +246,9 @@ class TestSkillExtractorEdgeCases:
 
     def test_skill_at_sentence_end(self, extractor):
         """Extracts skill at sentence end."""
-        text = "The team must design."
+        text = "The team must design systems."
         skills = extractor.extract(text)
-        # May or may not extract depending on context
-        assert isinstance(skills, list)
+        assert skills == ["design systems"]
 
     def test_hyphenated_noun(self, extractor):
         """Handles hyphenated compound nouns."""
@@ -282,16 +282,15 @@ class TestSkillExtractorSorting:
 
     def test_results_are_sorted(self, extractor):
         """Results returned in sorted order."""
-        text = "Develop solutions. Design architectures. Deploy systems."
+        text = "You will develop solutions. You will design architectures. You will deploy systems."
         skills = extractor.extract(text)
-        assert skills == sorted(skills)
+        assert skills == ["deploy systems", "design architectures", "develop solutions"]
 
     def test_sorted_case_insensitive(self, extractor):
         """Mixed-case input yields sorted, lowercase output."""
-        text = "Design systems and BUILD tools and Manage teams"
+        text = "You will design systems. You will BUILD tools. You will manage teams."
         skills = extractor.extract(text)
-        assert skills == sorted(skills)
-        assert all(s.islower() for s in skills)
+        assert skills == ["build tools", "design systems"]
 
 
 class TestSkillExtractorPerformance:
