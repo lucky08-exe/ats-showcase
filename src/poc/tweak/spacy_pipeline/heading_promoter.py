@@ -131,7 +131,7 @@ EEO_TRIGGERS: FrozenSet[str] = frozenset(
 # Protectedclass terms: race, color, religion, sex, gender, national origin, age, disability,
 # veteran, sexual orientation, marital status, genetic
 PROTECTED_CLASS_PATTERN = re.compile(
-    r"without regard to\s+.*?\b(race|color|religion|sex|gender|national origin|age|disability|"
+    r"without regard to\s+.{0,60}?\b(race|color|religion|sex|gender|national origin|age|disability|"
     r"veteran|sexual orientation|marital status|genetic)\b",
     re.IGNORECASE,
 )

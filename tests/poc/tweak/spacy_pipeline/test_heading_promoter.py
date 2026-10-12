@@ -883,3 +883,26 @@ class TestMultipleTrailingEEO:
         result = promoter.process(text)
         assert result == expected
         assert promoter.process(result) == result
+
+
+class TestProtectedClassPatternBound:
+    """PROTECTED_CLASS_PATTERN only links 'without regard to' to a term within ~60 chars (Issue #374)."""
+
+    def test_protected_class_term_within_60_chars_is_eeo(self) -> None:
+        """A protected-class term 54 chars after 'without regard to' is EEO and isolated."""
+        promoter = HeadingPromoter()
+        gap = "alpha " * 9  # 54 chars of neutral filler
+        text = f"More text.\n\nAcme hires without regard to {gap}race."
+        expected = f"More text.\n\n## Equal Opportunity Employer\n\nAcme hires without regard to {gap}race."
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result
+
+    def test_protected_class_term_beyond_60_chars_not_eeo(self) -> None:
+        """A protected-class term 66 chars after 'without regard to' is not EEO; text unchanged."""
+        promoter = HeadingPromoter()
+        gap = "alpha " * 11  # 66 chars of neutral filler, beyond the bound
+        text = f"More text.\n\nAcme hires without regard to {gap}race."
+        result = promoter.process(text)
+        assert result == text
+        assert promoter.process(result) == result
