@@ -419,40 +419,32 @@ class HeadingPromoter(PipelineComponent):
         if HEADING_PREFIX_PATTERN.match(first_line_stripped):
             return text
 
-        # Guard 2 (silent skip): the EEO paragraph's first line is itself a known heading
-        # phrase. Two shapes reach here: a standalone "Equal Opportunity Employer" line, which
-        # matches the EEO trigger on its own; or a known heading followed by an EEO sentence in
-        # the same paragraph (e.g. "Benefits" then "We are an equal opportunity employer."), where
-        # the paragraph matches on the sentence, not on the heading line. Phase 2 promotes the
-        # heading line to "## ...", so a synthetic heading would give two headings for one block.
-        # Return unchanged; the outcome is plain promotion of the existing line.
-        # Heading marker and emphasis characters are stripped first, as Guard 5 does, so that
-        # "# Benefits", "__Benefits__" and "_Benefits_" are recognised as the known heading.
+        # Guard 2: the EEO paragraph's first line is itself a known heading phrase. Heading marker
+        # and emphasis characters are stripped first, as Guard 5 does, so that "# Benefits",
+        # "__Benefits__" and "_Benefits_" are recognised as the known heading.
+        # Two shapes reach here:
+        # - The first line is the EEO heading itself (a standalone "Equal Opportunity Employer"
+        #   line, which matches the EEO trigger on its own). Return unchanged: a synthetic heading
+        #   would double it.
+        # - A known heading followed by an EEO sentence in the same paragraph (e.g. "Benefits"
+        #   then "We are an equal opportunity employer."). The paragraph matches on the sentence,
+        #   so the heading line is split off: the EEO sentence gets its own synthetic section
+        #   below the heading (Issue #493). Split is applied after Guards 3 and 5, so it is only
+        #   reached when neither a preceding heading nor an existing EEO heading applies.
+        # A single-line paragraph that is only a known heading has nothing to split: return unchanged.
         heading_text = HEADING_PREFIX_PATTERN.sub("", first_line_stripped).strip("*_: ")
         normalized = self._normalize(heading_text)
+        split_glued_heading = False
         if normalized in self._headings:
-            return text
+            if normalized == EEO_HEADING_NORMALIZED or len(eeo_para) < 2:
+                return text
+            split_glued_heading = True
 
         # Guard 3: Check if preceding paragraph ends with a heading
         if first_eeo_idx > 0:
             preceding_para = paragraphs[first_eeo_idx - 1]
             if preceding_para and HEADING_PREFIX_PATTERN.match(preceding_para[-1].strip()):
                 return text
-
-        # Guard 4 (silent skip): the paragraph immediately before the EEO paragraph starts
-        # with a known heading phrase (e.g. "Benefits"). That block is a section in its own
-        # right, and Phase 2 promotes its first line to "## ..." when it follows a blank
-        # line. Intent: do not open a second synthetic section directly under it, so the
-        # EEO sentence stays with the preceding known section. Return unchanged.
-        # A leading "## " prefix from an earlier pass is stripped first so the check is
-        # idempotent (Issue #374).
-        if first_eeo_idx > 0:
-            preceding_para = paragraphs[first_eeo_idx - 1]
-            if preceding_para:
-                preceding_first_line = HEADING_PREFIX_PATTERN.sub("", preceding_para[0].strip())
-                preceding_normalized = self._normalize(preceding_first_line)
-                if preceding_normalized in self._headings:
-                    return text
 
         # Guard 5 (silent skip): an EEO heading already exists anywhere in the document, with a
         # "#" heading marker and/or "*" or "_" emphasis (e.g. a standalone "Equal Opportunity
@@ -467,9 +459,15 @@ class HeadingPromoter(PipelineComponent):
 
         # Build result with inserted lines
         result_lines = list(lines)
-        # Insert heading and blank line before EEO paragraph at its start index
-        result_lines.insert(insert_line_idx, "## Equal Opportunity Employer")
-        result_lines.insert(insert_line_idx + 1, "")
+        if split_glued_heading:
+            # Keep the known heading line where it is; the EEO sentence(s) follow a blank line
+            # and the synthetic heading, so Phase 2 promotes only the known heading.
+            result_lines.insert(insert_line_idx + 1, "")
+            result_lines.insert(insert_line_idx + 2, "## Equal Opportunity Employer")
+        else:
+            # Insert heading and blank line before EEO paragraph at its start index
+            result_lines.insert(insert_line_idx, "## Equal Opportunity Employer")
+            result_lines.insert(insert_line_idx + 1, "")
 
         # Reconstruct, preserving original trailing newline status
         result = line_ending.join(result_lines)
