@@ -16,7 +16,7 @@
 
 **Target**: Python 3.11+
 **Package manager**: `uv` (faster than pip)
-**Type checking**: `mypy` (strict mode)
+**Type checking**: `mypy` (non-strict by default; `run-local-ci.sh --strict` available)
 **Linting**: `ruff` (Rust-based, faster than flake8)
 **Formatting**: `black` (opinionated, uncompromising)
 **Testing**: `pytest` with `pytest-cov` + `pytest-asyncio`
@@ -80,7 +80,7 @@ tests/
 **Constants**: `UPPER_SNAKE_CASE` (MAX_RETRIES, DEFAULT_TIMEOUT)
 **Private**: `_leading_underscore` (_internal_helper, _parse_html)
 **Dataclasses**: `PascalCase` (RawJob, PreprocessedJob, Assessment)
-**Type hints**: Always required (mypy --strict)
+**Type hints**: Always required (mypy; strict via `run-local-ci.sh --strict`)
 
 ```python
 # GOOD

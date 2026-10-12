@@ -401,7 +401,7 @@ class JobCrawler:
 
 - **Formatter**: Black (100-character line length)
 - **Linter**: Ruff (flake8-compatible)
-- **Type Checker**: Mypy (strict mode)
+- **Type Checker**: Mypy (non-strict by default; `run-local-ci.sh --strict` available)
 - **Sort Imports**: isort
 
 ```bash
