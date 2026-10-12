@@ -190,8 +190,9 @@ class HeadingPromoter(PipelineComponent):
            ## Equal Opportunity Employer heading before them.
         2. Promote plain-text lines matching known heading patterns to ## format.
 
-        The conversion preserves line structure, line endings, and is idempotent
-        (processing twice produces same output).
+        The output preserves existing lines; EEO isolation adds a heading and blank
+        line; mixed line endings are normalized to the first one detected.
+        Known exception to idempotency: see Guard 4 in _isolate_eeo_paragraphs.
 
         Args:
             text: Input text (may be empty, contain CRLF, or Unicode).
@@ -202,10 +203,10 @@ class HeadingPromoter(PipelineComponent):
 
         Example:
             >>> promoter = HeadingPromoter()
-            >>> text = "Job Description\\nWork with clients.\\nRole Overview\\nFocus."
+            >>> text = "Job Description\\n\\nWork with clients.\\n\\nRole Overview\\n\\nFocus on delivery."
             >>> result = promoter.process(text)
-            >>> "## Job Description" in result
-            True
+            >>> result
+            '## Job Description\\n\\nWork with clients.\\n\\n## Role Overview\\n\\nFocus on delivery.'
         """
         original = text
         try:
