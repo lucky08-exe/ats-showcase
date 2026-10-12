@@ -150,11 +150,15 @@ PROTECTED_CLASS_PATTERN = re.compile(
 )
 
 # ADA/accommodation keywords and contact/email phrases, matched on word boundaries so that
-# "ada" does not match "Canada" or "adapt" (Issue #374). Bare "contact" and "email" are
-# deliberately absent: they also open ordinary sentences such as "Contact the hiring manager
-# for role details.", which must not be treated as boilerplate.
+# "ada" does not match "Canada" or "adapt" (Issue #374). The ADA token is case-sensitive so the
+# language "Ada" ("Experience with Ada.") is not treated as boilerplate; all other alternatives
+# are case-insensitive. Bare "contact" and "email" are deliberately absent: they also open
+# ordinary sentences such as "Contact the hiring manager for role details.", which must not be
+# treated as boilerplate.
+# Known limitation: bare "disability" and "by email" are still matched case-insensitively, so
+# ordinary sentences containing them can be read as boilerplate.
 BOILERPLATE_WORD_PATTERN = re.compile(
-    r"\b(?:accommodations?|ada|disability|contact\s+(?:us|hr)|email\s+(?:us|hr)|by\s+email)\b",
+    r"\b(?:accommodations?|(?-i:ADA)|disability|contact\s+(?:us|hr)|email\s+(?:us|hr)|by\s+email)\b",
     re.IGNORECASE,
 )
 
@@ -465,8 +469,9 @@ class HeadingPromoter(PipelineComponent):
     def _is_empty_or_boilerplate(self, para: List[str]) -> bool:
         """Check if paragraph is empty or boilerplate (ADA/contact/accommodation).
 
-        Boilerplate patterns: accommodation, disability, ADA, contact, email,
-        "if you need", "reasonable accommodation", etc.
+        Boilerplate patterns: accommodation(s), disability, ADA (uppercase only), contact us/hr,
+        email us/hr, by email (whole words), plus the phrases "if you need", "please contact",
+        "reasonable accommodation" and "get in touch".
 
         Args:
             para: Paragraph as list of lines

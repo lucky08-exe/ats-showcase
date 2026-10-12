@@ -1130,3 +1130,27 @@ class TestProtectedClassPlurals:
         result = promoter.process(text)
         assert result == expected
         assert promoter.process(result) == result
+
+
+class TestEEOAdaCaseSensitivity:
+    """The ADA token is uppercase-only, so the language 'Ada' is not boilerplate (Issue #374)."""
+
+    def test_language_ada_trailing_paragraph_not_boilerplate(self) -> None:
+        """'Experience with Ada.' is not boilerplate, so the EEO paragraph is not isolated."""
+        promoter = HeadingPromoter()
+        text = "More text.\n\nAcme is an equal opportunity employer.\n\nExperience with Ada."
+        result = promoter.process(text)
+        assert result == text
+        assert promoter.process(result) == result
+
+    def test_uppercase_ada_request_still_boilerplate(self) -> None:
+        """'Requests for ADA support go to HR.' is still boilerplate, so the EEO paragraph is isolated."""
+        promoter = HeadingPromoter()
+        text = "More text.\n\nAcme is an equal opportunity employer.\n\nRequests for ADA support go to HR."
+        expected = (
+            "More text.\n\n## Equal Opportunity Employer\n\n"
+            "Acme is an equal opportunity employer.\n\nRequests for ADA support go to HR."
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result
