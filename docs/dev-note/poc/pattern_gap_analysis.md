@@ -8,14 +8,14 @@
 
 ## Current inventory
 
-Counted by reading the files on 2026-10-11.
+Counted by reading the source files on 2026-10-11 (no import run).
 
 | File | Structure | Count |
 |------|-----------|-------|
 | `src/poc/skills/patterns.py` | `SKILL_VERBS` list | 24 |
 | `src/poc/technologies/patterns.py` | `TECH_TERMS` set, `# ---` category comments | 42 |
 
-Note: the text of issue #430 (and #268) cites 27 skill verbs and 51 tech terms. The files contain 24 and 42, verified by importing both lists. The issue figures are stale.
+Note: the text of issue #430 (and #268) cites 27 skill verbs and 51 tech terms. The source files contain 24 and 42, counted by reading the source files. The issue figures are stale.
 
 Tech term breakdown by existing category comment:
 
