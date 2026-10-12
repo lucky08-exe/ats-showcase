@@ -169,10 +169,13 @@ BOILERPLATE_WORD_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-# "accommodation(s)" with "request(s)/requested" within ~60 chars on the same sentence, in either
-# order (e.g. "Accommodations are available on request.", "Request accommodations here.").
+# Accommodation notices only: "accommodation(s)" followed by "on/upon/to request" within ~60 chars
+# on the same sentence (e.g. "Accommodations are available on request."), or "request(ed)
+# [a] [reasonable] accommodation(s)" (e.g. "Request reasonable accommodations here."). Business
+# uses such as "Manage travel accommodation requests" are job content and do not match.
 ACCOMMODATION_REQUEST_PATTERN = re.compile(
-    r"\baccommodations?\b[^.!?]{0,60}\brequest\w*|\brequest\w*[^.!?]{0,60}\baccommodations?\b",
+    r"\baccommodations?\b[^.!?]{0,60}\b(?:on|upon|to)\s+request\w*|"
+    r"\brequest\w*\s+(?:a\s+)?(?:reasonable\s+)?accommodations?\b",
     re.IGNORECASE,
 )
 
