@@ -1418,20 +1418,15 @@ class TestEEOFirstSentenceCandidacy:
         assert result == expected
         assert promoter.process(result) == result
 
-    def test_that_requires_accommodation_job_wording_is_boilerplate_known_limitation(self) -> None:
-        """Known limitation (accepted): 'a role that requires accommodations' job wording isolates the EEO sentence.
+    def test_that_requires_accommodation_job_wording_is_not_boilerplate(self) -> None:
+        """Negative: 'A role that requires accommodations for travel.' is job content, not boilerplate; unchanged.
 
-        The "who/whom/that require ... accommodation(s)" lead-in cannot tell a notice from a job description.
-        The test pins the current behaviour; it is not a statement that the line is boilerplate.
+        "that" is not a notice lead-in, so the EEO sentence is not isolated together with this job line.
         """
         promoter = HeadingPromoter()
-        job_line = "A role that requires accommodations for travel."
-        text = f"More text.\n\nAcme is an equal opportunity employer.\n\n{job_line}"
-        expected = (
-            f"More text.\n\n## Equal Opportunity Employer\n\nAcme is an equal opportunity employer.\n\n{job_line}"
-        )
+        text = "More text.\n\nAcme is an equal opportunity employer. A role that requires accommodations for travel."
         result = promoter.process(text)
-        assert result == expected
+        assert result == text
         assert promoter.process(result) == result
 
     @pytest.mark.parametrize(
