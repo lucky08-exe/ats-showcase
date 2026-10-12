@@ -582,10 +582,13 @@ Paragraph With EEO Late
 class TestHeadingPromoterRegressionEEO:
     """Regression tests with realistic WorkSource-shaped job text."""
 
-    def test_worksource_with_trailing_eeo_isolated(self) -> None:
-        """WorkSource-shaped job with trailing EEO isolated into own section."""
+    def test_synthetic_worksource_shaped_trailing_eeo_isolated(self) -> None:
+        """Synthetic WorkSource-shaped job (hand-written, not fixture-derived) with trailing EEO isolated.
+
+        data/work/WorkSource_jobs.json holds list-crawl records only (description/requirements are
+        null, no EEO text), so it cannot supply a trailing-EEO body; the text below stays inline.
+        """
         promoter = HeadingPromoter()
-        # Realistic WorkSource-shaped text
         text = """Role Overview
 
 Medtech company seeking a senior engineer to lead the platform team.
@@ -612,29 +615,28 @@ XYZ Corporation is an equal opportunity employer and is committed to creating a 
 
         result = promoter.process(text)
 
-        # Verify sections are promoted correctly
-        assert "## Role Overview" in result
-        assert "## Key Responsibilities" in result
-        assert "## Required Qualifications" in result
-        assert "## Technical Skills" in result
+        eeo_sentence = (
+            "XYZ Corporation is an equal opportunity employer and is committed to creating "
+            "a diverse and inclusive workplace."
+        )
+        expected = text.replace("Role Overview\n", "## Role Overview\n", 1)
+        expected = expected.replace("Key Responsibilities\n", "## Key Responsibilities\n", 1)
+        expected = expected.replace("Required Qualifications\n", "## Required Qualifications\n", 1)
+        expected = expected.replace("Technical Skills\n", "## Technical Skills\n", 1)
+        expected = expected.replace(eeo_sentence, f"## Equal Opportunity Employer\n\n{eeo_sentence}", 1)
+        assert result == expected
 
-        # EEO should be isolated into own section
-        assert "## Equal Opportunity Employer" in result
-
-        # Verify preceding section content is not polluted with EEO text
-        # (by checking structure before the EEO heading)
-        lines = result.split("\n")
-        eeo_heading_line = None
-        for i, line in enumerate(lines):
-            if "## Equal Opportunity Employer" in line:
-                eeo_heading_line = i
-                break
-
-        assert eeo_heading_line is not None, "EEO heading not found"
-
-        # Check that "Technical Skills" section ends before EEO heading
-        tech_section_lines = [line for line in lines[:eeo_heading_line] if "Kubernetes" in line or "Python" in line]
-        assert len(tech_section_lines) > 0, "Technical skills content not found before EEO"
+        # Section bodies are exact and unpolluted by the EEO text
+        required_body = result.split("## Required Qualifications\n", 1)[1].split("\n## ", 1)[0]
+        assert required_body == (
+            "\nBachelor's degree in Computer Science or equivalent experience.\n"
+            "5+ years of software engineering experience.\n"
+            "Strong knowledge of AWS or GCP.\n"
+        )
+        tech_body = result.split("## Technical Skills\n", 1)[1].split("\n## ", 1)[0]
+        assert tech_body == "\n* Python\n* Go\n* Kubernetes\n"
+        assert result.endswith(f"## Equal Opportunity Employer\n\n{eeo_sentence}")
+        assert promoter.process(result) == result
 
     def test_eeo_followed_by_non_boilerplate_paragraph_unchanged(self) -> None:
         """EEO sentence followed by a non-boilerplate paragraph is not isolated; text is unchanged."""
