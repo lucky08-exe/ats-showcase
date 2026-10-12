@@ -452,22 +452,14 @@ class TestHeadingPromoterEEOIsolation:
         assert promoter.process(result) == result
 
     def test_eeo_in_bullet_list_not_split(self) -> None:
-        """EEO phrase inside a bullet point is not split."""
+        """A trailing bullet containing an EEO sentence is not isolated (bullet exclusion in _is_eeo_paragraph)."""
         promoter = HeadingPromoter()
-        text = """Required Qualifications
-
-* Experience with Python
-* Understanding of equal opportunity laws
-
-Technical Skills
-
-* Python
-* Java"""
-
+        text = "Required Qualifications\n\n5+ years of experience.\n\n* Acme is an equal opportunity employer."
+        expected = "## Required Qualifications\n\n5+ years of experience.\n\n* Acme is an equal opportunity employer."
         result = promoter.process(text)
-
-        # No EEO heading inserted (it's in a list, not trailing)
+        assert result == expected
         assert result.count("## Equal Opportunity Employer") == 0
+        assert promoter.process(result) == result
 
     def test_eeo_already_under_heading_not_doubled(self) -> None:
         """EEO paragraph already under a heading is not re-headed (Guard 3 keeps it unchanged)."""
@@ -727,12 +719,13 @@ class TestHeadingPromoterDefectFixes:
         assert promoter.process(result) == result
 
     def test_mid_document_bullet_with_eeo_unchanged(self) -> None:
-        """EEO phrase in bullet list: not isolated (no real section after)."""
+        """A bullet EEO sentence after a body paragraph is not isolated; text is unchanged."""
         promoter = HeadingPromoter()
-        text = "* Understanding of equal opportunity laws"
+        text = "More text.\n\n* Acme is an equal opportunity employer."
         result = promoter.process(text)
-        assert result.count("## Equal Opportunity Employer") == 0
         assert result == text
+        assert result.count("## Equal Opportunity Employer") == 0
+        assert promoter.process(result) == result
 
     def test_eeo_followed_by_real_benefits_section_unchanged(self) -> None:
         """EEO followed by real '## Benefits' section: no synthetic heading."""
