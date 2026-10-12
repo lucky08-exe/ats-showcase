@@ -365,11 +365,12 @@ class HeadingPromoter(PipelineComponent):
                 if preceding_normalized in self._headings:
                     return text
 
-        # Guard 5 (silent skip): an EEO heading already exists anywhere in the document, with or
-        # without a "## " prefix (e.g. a standalone "Equal Opportunity Employer" line above, or
-        # one promoted by an earlier pass). Inserting another would duplicate that heading.
+        # Guard 5 (silent skip): an EEO heading already exists anywhere in the document, with a
+        # "#" heading marker and/or "*" or "_" emphasis (e.g. a standalone "Equal Opportunity
+        # Employer" line above, "**Equal Opportunity Employer**", or one promoted by an earlier
+        # pass). Inserting another would duplicate that heading.
         for line in lines:
-            if self._normalize(HEADING_PREFIX_PATTERN.sub("", line.strip())) == EEO_HEADING_NORMALIZED:
+            if self._normalize(line.strip().strip("#*_: ")) == EEO_HEADING_NORMALIZED:
                 return text
 
         # Insert heading before the first EEO paragraph's first line

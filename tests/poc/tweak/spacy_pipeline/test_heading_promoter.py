@@ -1074,3 +1074,25 @@ class TestEEOIdempotenceUnderPromotion:
         assert result1 == expected
         assert result2 == expected
         assert result1.count("## Equal Opportunity Employer") == 0
+
+
+class TestEEOGuard5DecoratedHeading:
+    """Guard 5 recognises an existing EEO heading written with emphasis markers (Issue #374)."""
+
+    @pytest.mark.parametrize(
+        "heading_line",
+        [
+            "**Equal Opportunity Employer**",
+            "__Equal Opportunity Employer__",
+            "*Equal Opportunity Employer*",
+        ],
+    )
+    def test_decorated_eeo_heading_not_duplicated(self, heading_line: str) -> None:
+        """A bold/italic EEO heading above the EEO sentence stops insertion; text is unchanged."""
+        promoter = HeadingPromoter()
+        text = f"More text.\n\n{heading_line}\n\nAcme is an equal opportunity employer.\n\nPlease contact HR."
+        result = promoter.process(text)
+        assert result == text
+        assert result.count(heading_line) == 1
+        assert "## Equal Opportunity Employer" not in result
+        assert promoter.process(result) == result
