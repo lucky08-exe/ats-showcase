@@ -1541,3 +1541,44 @@ class TestEEOJobRequireAccommodationsNotBoilerplate:
         assert result == text
         assert "## Equal Opportunity Employer" not in result
         assert promoter.process(result) == result
+
+
+class TestEEOWhoRequireAccommodationsScope:
+    """The 'who/whom require ... accommodation' notice lead-in is limited to people who apply (Issue #374)."""
+
+    @pytest.mark.parametrize(
+        "job_line",
+        [
+            "Engineers who require accommodations for travel.",
+            "Engineers who require accommodations for travel. Travel is up to 20%.",
+        ],
+    )
+    def test_engineers_who_require_accommodations_job_wording_not_boilerplate(self, job_line: str) -> None:
+        """Negative: 'Engineers who require accommodations for travel.' is job content; EEO is not isolated."""
+        promoter = HeadingPromoter()
+        # Shape 1: job sentence in its own paragraph after the EEO paragraph.
+        separate = f"More text.\n\nAcme is an equal opportunity employer.\n\n{job_line}"
+        assert promoter.process(separate) == separate
+        assert promoter.process(promoter.process(separate)) == separate
+        # Shape 2: job sentence in the same paragraph as the EEO sentence.
+        same = f"More text.\n\nAcme is an equal opportunity employer. {job_line}"
+        assert promoter.process(same) == same
+        assert promoter.process(promoter.process(same)) == same
+
+    @pytest.mark.parametrize(
+        "notice_line",
+        [
+            "Candidates who require accommodation in the application process will be supported.",
+            "Individuals who require accommodations during the interview process should contact HR.",
+        ],
+    )
+    def test_applicant_lead_in_accommodation_notice_still_boilerplate(self, notice_line: str) -> None:
+        """Positive: applicant-facing 'who require ... accommodation' notices stay boilerplate; EEO is isolated."""
+        promoter = HeadingPromoter()
+        text = f"More text.\n\nAcme is an equal opportunity employer. {notice_line}"
+        expected = (
+            f"More text.\n\n## Equal Opportunity Employer\n\nAcme is an equal opportunity employer. {notice_line}"
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result

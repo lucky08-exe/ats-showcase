@@ -201,10 +201,12 @@ BOILERPLATE_WORD_PATTERN = re.compile(
 # uses such as "Manage travel accommodation requests" are job content and do not match.
 # Also "accommodation request(s) can/may/should/will be made|submitted|sent|directed" (e.g.
 # "Accommodation requests can be made through HR."), "if/should you require ... accommodation(s)"
-# (e.g. "If you require accommodation, let us know.") and a notice lead-in "who/whom require ...
-# accommodation(s)" (e.g. "Applicants who require accommodation in the application process will be
-# supported."). The bare "require ... accommodation(s)" wording is not matched, so job content such as
-# "The role may require accommodations for travel." is job content.
+# (e.g. "If you require accommodation, let us know.") and a notice lead-in "applicants/candidates/
+# individuals/persons/those who/whom require ... accommodation(s)" (e.g. "Applicants who require
+# accommodation in the application process will be supported."). The lead-in is limited to people who
+# apply, so job content such as "Engineers who require accommodations for travel." is not matched, and
+# the bare "require ... accommodation(s)" wording is not matched either: "The role may require
+# accommodations for travel." is job content.
 # Known false positives (accepted): the "request(ed) [a] accommodation" alternative matches travel and
 # booking wording such as "Request accommodation from the hiring manager." or "Request accommodations
 # for travel.", and "accommodations ... to request" matches "Book accommodations to request approval.".
@@ -215,7 +217,7 @@ ACCOMMODATION_REQUEST_PATTERN = re.compile(
     r"\brequest\w*\s+(?:a\s+)?(?:reasonable\s+)?accommodations?\b|"
     r"\baccommodations?\s+requests?\s+(?:can|may|should|will)\s+be\s+(?:made|submitted|sent|directed)\b|"
     r"\b(?:if\s+you\s+require|should\s+you\s+require)\b[^.!?]{0,80}?\baccommodations?\b|"
-    r"\b(?:who|whom)\s+require\w*\b[^.!?]{0,80}?\baccommodations?\b",
+    r"\b(?:applicants|candidates|individuals|persons|those)\s+(?:who|whom)\s+require\w*\b[^.!?]{0,80}?\baccommodations?\b",
     re.IGNORECASE,
 )
 
