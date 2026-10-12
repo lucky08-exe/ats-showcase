@@ -176,12 +176,12 @@ class TestTechExtractorFixtures:
         text_lower = fixture_knowledge_skills.lower()
         tech_lower = [t.lower() for t in techs]
 
-        if "pytorch" in text_lower:
-            assert any("pytorch" in t for t in tech_lower), "Should extract 'PyTorch'"
-        if "c++" in text_lower:
-            assert any("c++" in t for t in tech_lower), "Should extract 'C++'"
-        if "computer vision" in text_lower:
-            assert any("computer vision" in t for t in tech_lower), "Should extract 'computer vision'"
+        assert "pytorch" in text_lower, "Precondition: fixture must contain 'PyTorch'"
+        assert "c++" in text_lower, "Precondition: fixture must contain 'C++'"
+        assert "computer vision" in text_lower, "Precondition: fixture must contain 'computer vision'"
+        assert any("pytorch" in t for t in tech_lower), "Should extract 'PyTorch'"
+        assert any("c++" in t for t in tech_lower), "Should extract 'C++'"
+        assert any("computer vision" in t for t in tech_lower), "Should extract 'computer vision'"
 
     def test_fixture_combined_extraction(self, extractor, nlp, fixture_what_you_ll_do, fixture_knowledge_skills):
         """Extract from combined fixtures."""
@@ -292,12 +292,16 @@ class TestTechExtractorEdgeCases:
         # JavaScript may or may not be in TECH_TERMS
         assert isinstance(techs, list)
 
-    def test_negated_technology(self, extractor, nlp):
-        """Handles negation (does not extract if negated)."""
+    def test_negation_not_handled_known_limitation(self, extractor, nlp):
+        """Negation handling is NOT implemented; this only checks a non-term is absent.
+
+        "COBOL" is not in TECH_TERMS, so it must not be extracted. This does not
+        verify negation logic: a negated known term (e.g. "No experience with Python")
+        would still be extracted.
+        """
         text = "No experience with COBOL required."
         doc = nlp(text)
         techs = extractor.extract(doc)
-        # COBOL not in TECH_TERMS, so shouldn't extract
         assert all("cobol" not in t.lower() for t in techs)
 
 
@@ -309,17 +313,17 @@ class TestTechExtractorSorting:
         text = "Use Python and Django and AWS."
         doc = nlp(text)
         techs = extractor.extract(doc)
-        if len(techs) > 1:
-            assert techs == sorted(techs)
+        assert len(techs) > 1
+        assert techs == sorted(techs)
 
     def test_sorted_alphabetically(self, extractor, nlp):
         """Results sorted alphabetically."""
         text = "Zulu Python AWS Django"
         doc = nlp(text)
         techs = extractor.extract(doc)
-        if len(techs) > 1:
-            for i in range(len(techs) - 1):
-                assert techs[i] <= techs[i + 1]
+        assert len(techs) > 1
+        for i in range(len(techs) - 1):
+            assert techs[i] <= techs[i + 1]
 
 
 class TestTechExtractorWithPreprocessing:
