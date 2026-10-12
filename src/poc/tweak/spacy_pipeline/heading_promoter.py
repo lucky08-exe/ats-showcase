@@ -170,9 +170,18 @@ PROTECTED_CLASS_PATTERN = re.compile(
 
 # Discrimination-disclaimer wording for a sentence after an EEO first sentence (Issue #374 round 6).
 # "does not discriminate" is also an EEO trigger for the first sentence; this pattern additionally
-# covers "do not", "will not" and "never" (e.g. "We do not discriminate." or "We do not discriminate on
-# the basis of race, color, ...") so that such a later sentence is EEO-ish and does not block isolation.
-DISCRIMINATE_PATTERN = re.compile(r"\b(?:do(?:es)?\s+not|will\s+not|never)\s+discriminat\w*", re.IGNORECASE)
+# covers a first-person disclaimer ("We do not discriminate.", "We will not discriminate.") and a
+# "do/does/will not discriminate" followed by "on", "against" or "based" (e.g. "Acme will not
+# discriminate on the basis of race."), so that such a later sentence is EEO-ish and does not block
+# isolation. "never" is deliberately absent: "Our ranking never discriminates against junior
+# candidates." is job content. Known limitation: a first-person job sentence such as "We do not
+# discriminate between file types." is still EEO-ish, and a third-person subject without a following
+# on/against/based ("The tool will not discriminate between file types.") is job content.
+DISCRIMINATE_PATTERN = re.compile(
+    r"\b(?:(?:we|i)\s+(?:do|will)\s+not\s+discriminat\w*|"
+    r"(?:do(?:es)?|will)\s+not\s+discriminat\w*\s+(?:on|against|based)\b)",
+    re.IGNORECASE,
+)
 
 # "encouraged to apply" (Issue #374 round 6), e.g. "Women, minorities, veterans and individuals with
 # disabilities are encouraged to apply." The phrase is generic, so it is accepted only as a sentence

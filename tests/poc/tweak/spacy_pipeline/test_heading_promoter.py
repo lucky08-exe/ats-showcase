@@ -1582,3 +1582,52 @@ class TestEEOWhoRequireAccommodationsScope:
         result = promoter.process(text)
         assert result == expected
         assert promoter.process(result) == result
+
+
+class TestEEODiscriminateWordingScope:
+    """DISCRIMINATE_PATTERN matches disclaimers, not job wording such as 'never discriminates' (Issue #374)."""
+
+    def test_we_will_not_discriminate_second_sentence_isolated(self) -> None:
+        """Positive: 'We will not discriminate.' after an EEO sentence is a disclaimer; the paragraph is isolated."""
+        promoter = HeadingPromoter()
+        text = "More text.\n\nAcme is an equal opportunity employer. We will not discriminate."
+        expected = (
+            "More text.\n\n## Equal Opportunity Employer\n\n"
+            "Acme is an equal opportunity employer. We will not discriminate."
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result
+
+    def test_company_will_not_discriminate_on_basis_isolated(self) -> None:
+        """Positive: 'Acme will not discriminate on the basis of race.' is a disclaimer; the paragraph is isolated."""
+        promoter = HeadingPromoter()
+        text = "More text.\n\nAcme is an equal opportunity employer. Acme will not discriminate on the basis of race."
+        expected = (
+            "More text.\n\n## Equal Opportunity Employer\n\n"
+            "Acme is an equal opportunity employer. Acme will not discriminate on the basis of race."
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result
+
+    def test_never_discriminates_job_sentence_left_alone(self) -> None:
+        """Negative: 'Our ranking never discriminates against junior candidates.' is job content; unchanged."""
+        promoter = HeadingPromoter()
+        text = (
+            "More text.\n\nAcme is an equal opportunity employer. "
+            "Our ranking never discriminates against junior candidates."
+        )
+        result = promoter.process(text)
+        assert result == text
+        assert "## Equal Opportunity Employer" not in result
+        assert promoter.process(result) == result
+
+    def test_will_not_discriminate_between_job_sentence_left_alone(self) -> None:
+        """Negative: 'The tool will not discriminate between file types.' is job content; unchanged."""
+        promoter = HeadingPromoter()
+        text = "More text.\n\nAcme is an equal opportunity employer. The tool will not discriminate between file types."
+        result = promoter.process(text)
+        assert result == text
+        assert "## Equal Opportunity Employer" not in result
+        assert promoter.process(result) == result
