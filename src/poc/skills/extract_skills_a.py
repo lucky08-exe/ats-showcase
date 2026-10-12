@@ -10,16 +10,20 @@ logger = logging.getLogger(__name__)
 
 
 class SkillExtractor:
-    def __init__(self, model_name="en_core_web_md"):
-        # Load spaCy model with error handling
-        try:
-            self.nlp = spacy.load(model_name)
-        except OSError:
-            logger.error(
-                f"Failed to load spaCy model '{model_name}'. Ensure it's installed: "
-                f"python -m spacy download {model_name}"
-            )
-            raise
+    def __init__(self, model_name="en_core_web_md", nlp=None):
+        # Reuse a pre-loaded pipeline when given; otherwise load the model.
+        if nlp is not None:
+            self.nlp = nlp
+        else:
+            # Load spaCy model with error handling
+            try:
+                self.nlp = spacy.load(model_name)
+            except OSError:
+                logger.error(
+                    f"Failed to load spaCy model '{model_name}'. Ensure it's installed: "
+                    f"python -m spacy download {model_name}"
+                )
+                raise
         self.matcher = Matcher(self.nlp.vocab)
 
         # 2. Define the Matcher Pattern
