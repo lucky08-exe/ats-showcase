@@ -939,6 +939,22 @@ class TestEEOSilentSkipGuards:
         assert result.count("## Equal Opportunity Employer") == 1
         assert promoter.process(result) == result
 
+    def test_standalone_eeo_heading_not_duplicated(self) -> None:
+        """Guard 5: a standalone 'Equal Opportunity Employer' line earlier in the document is not duplicated."""
+        promoter = HeadingPromoter()
+        text = (
+            "Equal Opportunity Employer\n\nWe value diverse teams.\n\n"
+            "Acme is an equal opportunity employer.\n\nPlease contact HR."
+        )
+        expected = (
+            "## Equal Opportunity Employer\n\nWe value diverse teams.\n\n"
+            "Acme is an equal opportunity employer.\n\nPlease contact HR."
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert result.count("## Equal Opportunity Employer") == 1
+        assert promoter.process(result) == result
+
 
 class TestMixedLineEndings:
     """Mixed CRLF/LF input is normalised to the first line ending detected (Issue #374)."""

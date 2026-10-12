@@ -116,6 +116,9 @@ KNOWN_PLAIN_HEADINGS: FrozenSet[str] = frozenset(
 
 # EEO phrase triggers for Issue #374 (small, high-precision set)
 # Matched case-insensitively in first ~200 chars of paragraph
+# Normalised form of the synthesized heading, used by Guard 5 to detect an existing EEO heading.
+EEO_HEADING_NORMALIZED = "equal opportunity employer"
+
 EEO_TRIGGERS: FrozenSet[str] = frozenset(
     [
         "equal opportunity employer",
@@ -351,6 +354,13 @@ class HeadingPromoter(PipelineComponent):
                 preceding_normalized = self._normalize(preceding_first_line)
                 if preceding_normalized in self._headings:
                     return text
+
+        # Guard 5 (silent skip): an EEO heading already exists anywhere in the document, with or
+        # without a "## " prefix (e.g. a standalone "Equal Opportunity Employer" line above, or
+        # one promoted by an earlier pass). Inserting another would duplicate that heading.
+        for line in lines:
+            if self._normalize(HEADING_PREFIX_PATTERN.sub("", line.strip())) == EEO_HEADING_NORMALIZED:
+                return text
 
         # Insert heading before the first EEO paragraph's first line
         insert_line_idx = para_starts[first_eeo_idx]
