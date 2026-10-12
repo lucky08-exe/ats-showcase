@@ -937,55 +937,64 @@ class TestProtectedClassPatternBound:
 
 
 class TestEEOSilentSkipGuards:
-    """Guards 2 and 4 in _isolate_eeo_paragraphs each skip insertion on their own (Issue #374)."""
+    """Guard 2 (standalone heading line) skips insertion; the glued-heading split and Guard 4 removal (#493, #494)."""
 
-    def test_guard4_alone_preceding_known_heading_skips_insertion(self) -> None:
-        """Guard 4 only: preceding paragraph starts with 'Benefits'; EEO first line is a sentence."""
+    def test_known_heading_section_before_trailing_eeo_gets_own_heading(self) -> None:
+        """#494: a trailing EEO paragraph after a known-heading section gets its own EEO section."""
         promoter = HeadingPromoter()
         text = (
             "More text.\n\nBenefits\nDental coverage.\n\n"
             "Acme is an equal opportunity employer and does not discriminate."
         )
         expected = (
-            "More text.\n\n## Benefits\nDental coverage.\n\n"
+            "More text.\n\n## Benefits\nDental coverage.\n\n## Equal Opportunity Employer\n\n"
             "Acme is an equal opportunity employer and does not discriminate."
         )
         result = promoter.process(text)
         assert result == expected
-        assert result.count("## Equal Opportunity Employer") == 0
+        assert result.count("## Equal Opportunity Employer") == 1
+        assert promoter.process(result) == result
 
-    def test_guard4_second_pass_is_idempotent(self) -> None:
-        """Guard 4 still skips on pass 2, when 'Benefits' has been promoted to '## Benefits'."""
+    def test_known_heading_section_second_pass_is_idempotent(self) -> None:
+        """#494: pass 2 sees the synthesized EEO heading (Guard 1/5) and leaves the output unchanged."""
         promoter = HeadingPromoter()
         text = (
             "More text.\n\nBenefits\nDental coverage.\n\n"
             "Acme is an equal opportunity employer and does not discriminate."
         )
         expected = (
-            "More text.\n\n## Benefits\nDental coverage.\n\n"
+            "More text.\n\n## Benefits\nDental coverage.\n\n## Equal Opportunity Employer\n\n"
             "Acme is an equal opportunity employer and does not discriminate."
         )
         first = promoter.process(text)
         assert first == expected
         assert promoter.process(first) == first
-        assert first.count("## Equal Opportunity Employer") == 0
+        assert first.count("## Equal Opportunity Employer") == 1
 
-    def test_guard4_second_pass_idempotent_with_compensation_heading(self) -> None:
-        """Guard 4 idempotency holds for a different known heading ('Compensation')."""
+    def test_compensation_section_second_pass_idempotent(self) -> None:
+        """#494: the trailing-EEO isolation also holds for a different known heading ('Compensation')."""
         promoter = HeadingPromoter()
         text = (
             "More text.\n\nCompensation\nBase salary range.\n\n"
             "Acme is an equal opportunity employer and does not discriminate."
         )
         expected = (
-            "More text.\n\n## Compensation\nBase salary range.\n\n"
+            "More text.\n\n## Compensation\nBase salary range.\n\n## Equal Opportunity Employer\n\n"
             "Acme is an equal opportunity employer and does not discriminate."
         )
         first = promoter.process(text)
         assert first == expected
         second = promoter.process(first)
         assert second == first
-        assert second.count("## Equal Opportunity Employer") == 0
+        assert second.count("## Equal Opportunity Employer") == 1
+
+    def test_preceding_heading_prefix_still_blocks_trailing_eeo_insertion(self) -> None:
+        """Guard 3 is unchanged by #494: an EEO paragraph right after a '## ' heading is not re-headed."""
+        promoter = HeadingPromoter()
+        text = "More text.\n\n## Benefits\n\nAcme is an equal opportunity employer."
+        result = promoter.process(text)
+        assert result == text
+        assert result.count("## Equal Opportunity Employer") == 0
 
     def test_guard2_alone_heading_line_in_eeo_paragraph_skips_insertion(self) -> None:
         """Guard 2 only: EEO paragraph's first line is a known heading, with no blank line before the sentence.
@@ -1062,26 +1071,102 @@ class TestMixedLineEndings:
         assert result == expected
         assert promoter.process(result) == result
 
+    def test_glued_known_heading_before_eeo_sentence_is_split(self) -> None:
+        """#493: 'Benefits' sharing a paragraph with an EEO sentence is split from it, with a synthetic EEO heading."""
+        promoter = HeadingPromoter()
+        text = "More text.\n\nBenefits\nWe are an equal opportunity employer."
+        expected = "More text.\n\n## Benefits\n\n## Equal Opportunity Employer\n\nWe are an equal opportunity employer."
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result
+
+    def test_glued_split_keeps_following_paragraphs_and_trailing_newline(self) -> None:
+        """#493: the split leaves later paragraphs intact and preserves the trailing newline."""
+        promoter = HeadingPromoter()
+        text = "Benefits\nWe are an equal opportunity employer and do not discriminate.\n\nPlease contact HR.\n"
+        expected = (
+            "## Benefits\n\n## Equal Opportunity Employer\n\n"
+            "We are an equal opportunity employer and do not discriminate.\n\nPlease contact HR.\n"
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result
+
+    def test_glued_split_crlf_input_uses_crlf_output(self) -> None:
+        """#493: CRLF input yields CRLF line endings for the split heading layout."""
+        promoter = HeadingPromoter()
+        text = "More text.\r\n\r\nBenefits\r\nWe are an equal opportunity employer."
+        expected = (
+            "More text.\r\n\r\n## Benefits\r\n\r\n"
+            "## Equal Opportunity Employer\r\n\r\nWe are an equal opportunity employer."
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result
+
+    def test_glued_split_with_later_eeo_paragraph_gets_single_heading(self) -> None:
+        """#493 + Guard 5: a second EEO paragraph after the split does not add another EEO heading."""
+        promoter = HeadingPromoter()
+        text = (
+            "Benefits\nWe are an equal opportunity employer.\n\nPlease contact HR.\n\n"
+            "We are an equal opportunity employer."
+        )
+        result = promoter.process(text)
+        assert result == (
+            "## Benefits\n\n## Equal Opportunity Employer\n\nWe are an equal opportunity employer.\n\n"
+            "Please contact HR.\n\nWe are an equal opportunity employer."
+        )
+        assert result.count("## Equal Opportunity Employer") == 1
+        assert promoter.process(result) == result
+
+    def test_glued_split_blocked_by_preceding_heading_guard3(self) -> None:
+        """#493 + Guard 3: a preceding '## ' heading still blocks the split; text is unchanged by isolation."""
+        promoter = HeadingPromoter()
+        text = "## Pay\n\nBenefits\nWe are an equal opportunity employer."
+        result = promoter.process(text)
+        assert result == "## Pay\n\n## Benefits\nWe are an equal opportunity employer."
+        assert result.count("## Equal Opportunity Employer") == 0
+
+    def test_glued_split_blocked_by_existing_eeo_heading_guard5(self) -> None:
+        """#493 + Guard 5: an existing EEO heading elsewhere blocks the split; no duplicate heading."""
+        promoter = HeadingPromoter()
+        text = "## Equal Opportunity Employer\n\nSome text.\n\nBenefits\nWe are an equal opportunity employer."
+        result = promoter.process(text)
+        assert (
+            result
+            == "## Equal Opportunity Employer\n\nSome text.\n\n## Benefits\nWe are an equal opportunity employer."
+        )
+        assert result.count("## Equal Opportunity Employer") == 1
+        assert promoter.process(result) == result
+
+    def test_glued_eeo_heading_word_first_line_is_not_split(self) -> None:
+        """#493: when the first line is the EEO heading itself, the paragraph is not split (no doubled heading)."""
+        promoter = HeadingPromoter()
+        text = "More text.\n\nEqual Opportunity Employer\nAcme is an equal opportunity employer."
+        result = promoter.process(text)
+        assert result == "More text.\n\n## Equal Opportunity Employer\nAcme is an equal opportunity employer."
+        assert result.count("## Equal Opportunity Employer") == 1
+
 
 class TestEEOIdempotenceUnderPromotion:
     """Candidate selection must not change when Phase 2 promotes a known heading (Issue #374)."""
 
     def test_heading_promoted_on_pass_one_does_not_add_eeo_heading_on_pass_two(self) -> None:
-        """Repro: 'Benefits' + EEO sentence is left unchanged by pass 1 (Guard 2) and stays so on pass 2."""
+        """Repro (#478, #493): 'Benefits' + EEO sentence is split on pass 1; pass 2 adds no second EEO heading."""
         promoter = HeadingPromoter()
         text = (
             "Benefits\nWe are an equal opportunity employer.\n\nPlease contact HR.\n\n"
             "We are an equal opportunity employer."
         )
         expected = (
-            "## Benefits\nWe are an equal opportunity employer.\n\nPlease contact HR.\n\n"
-            "We are an equal opportunity employer."
+            "## Benefits\n\n## Equal Opportunity Employer\n\nWe are an equal opportunity employer.\n\n"
+            "Please contact HR.\n\nWe are an equal opportunity employer."
         )
         result1 = promoter.process(text)
         result2 = promoter.process(result1)
         assert result1 == expected
         assert result2 == expected
-        assert result1.count("## Equal Opportunity Employer") == 0
+        assert result1.count("## Equal Opportunity Employer") == 1
 
     def test_different_heading_word_idempotent(self) -> None:
         """Variant with 'Compensation' as the promoted heading behaves the same way."""
@@ -1091,14 +1176,13 @@ class TestEEOIdempotenceUnderPromotion:
             "We are an equal opportunity employer."
         )
         expected = (
-            "## Compensation\nWe are an equal opportunity employer.\n\nPlease contact HR.\n\n"
-            "We are an equal opportunity employer."
+            "## Compensation\n\n## Equal Opportunity Employer\n\nWe are an equal opportunity employer.\n\n"
+            "Please contact HR.\n\nWe are an equal opportunity employer."
         )
         result1 = promoter.process(text)
         result2 = promoter.process(result1)
         assert result1 == expected
         assert result2 == expected
-        assert result1.count("## Equal Opportunity Employer") == 0
 
 
 class TestEEOGuard5DecoratedHeading:
@@ -1307,15 +1391,25 @@ class TestEEOHeadingPrefixGuards:
 class TestEEOGuard2DecoratedHeading:
     """Guard 2 recognises a known heading line decorated with '#' or '*_:' (Issue #374)."""
 
-    @pytest.mark.parametrize(
-        "heading_line",
-        ["__Benefits__", "_Benefits_", "# Benefits", "**Benefits**"],
-    )
-    def test_decorated_heading_line_in_eeo_paragraph_skips_insertion(self, heading_line: str) -> None:
-        """A decorated known heading sharing a paragraph with the EEO sentence stops insertion; text is unchanged.
+    @pytest.mark.parametrize("heading_line", ["__Benefits__", "_Benefits_"])
+    def test_decorated_heading_line_in_eeo_paragraph_is_split(self, heading_line: str) -> None:
+        """#493: an emphasis-decorated known heading sharing a paragraph with the EEO sentence is split off."""
+        promoter = HeadingPromoter()
+        text = f"More text.\n\n{heading_line}\nWe are an equal opportunity employer.\n\nPlease contact HR."
+        expected = (
+            f"More text.\n\n{heading_line}\n\n## Equal Opportunity Employer\n\n"
+            "We are an equal opportunity employer.\n\nPlease contact HR."
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert result.count("## Equal Opportunity Employer") == 1
+        assert promoter.process(result) == result
 
-        '**Benefits**' is already excluded by the bullet check in _is_eeo_paragraph, so it passes
-        through that check rather than Guard 2; it is kept as a regression guard.
+    @pytest.mark.parametrize("heading_line", ["# Benefits", "**Benefits**"])
+    def test_guard1_and_bullet_forms_unchanged(self, heading_line: str) -> None:
+        """'# Benefits' is stopped by Guard 1 and '**Benefits**' by the bullet check; text is unchanged.
+
+        Neither reaches the Guard 2 split.
         """
         promoter = HeadingPromoter()
         text = f"More text.\n\n{heading_line}\nWe are an equal opportunity employer.\n\nPlease contact HR."
