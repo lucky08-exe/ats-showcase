@@ -1265,8 +1265,12 @@ class TestEEOHeadingPrefixGuards:
         assert result == text
         assert promoter.process(result) == result
 
-    def test_guard2_h1_heading_before_eeo_line_unchanged(self) -> None:
-        """A '# Benefits' heading directly above an EEO line is left alone; text is unchanged."""
+    def test_guard1_hash_heading_with_known_phrase_text_unchanged(self) -> None:
+        """A '# Benefits' heading directly above an EEO line is left alone; text is unchanged.
+
+        The first line carries a markdown heading marker, so Guard 1 fires first and returns before
+        Guard 2 (known-heading check) is reached. The known-phrase text is incidental here.
+        """
         promoter = HeadingPromoter()
         text = "# Benefits\nWe are an equal opportunity employer.\n\nPlease contact HR."
         result = promoter.process(text)
