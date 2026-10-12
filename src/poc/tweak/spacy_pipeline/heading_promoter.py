@@ -139,6 +139,10 @@ EEO_TRIGGERS: FrozenSet[str] = frozenset(
 # that a line already promoted to "## Benefits" by an earlier pass still matches "benefits".
 HEADING_PREFIX_PATTERN = re.compile(r"^#{1,6}\s+")
 
+# End of a sentence: sentence-ending punctuation followed by whitespace (Issue #374). An EEO
+# paragraph is only a candidate when its trigger sits in this first sentence.
+FIRST_SENTENCE_END_PATTERN = re.compile(r"[.!?](?=\s)")
+
 # "without regard to" followed by a protected-class term within ~60 chars (Issue #374 Defect 3).
 # Protected-class terms, singular and plural: race(s), color(s), religion(s)/religious, sex(es),
 # gender(s), national origin(s), age(s), disability/disabilities, veteran(s), sexual orientation(s),
@@ -433,10 +437,11 @@ class HeadingPromoter(PipelineComponent):
     def _is_eeo_paragraph(self, para: List[str]) -> bool:
         """Check if a paragraph is an EEO paragraph.
 
-        Checks if the paragraph's text (first ~200 chars) matches an EEO trigger
-        phrase. Must not be a bullet, table or list line. A leading "#{1,6} " heading
-        marker and trailing ':' on the first line are ignored, so a paragraph gives the
-        same answer before and after Phase 2 promotes its first line (idempotence, Issue #374).
+        Checks if the paragraph's first sentence (first ~200 chars) matches an EEO trigger
+        phrase, or a protected-class pattern within its first ~400 chars. Must not be a
+        bullet, table or list line. A leading "#{1,6} " heading marker and trailing ':' on
+        the first line are ignored, so a paragraph gives the same answer before and after
+        Phase 2 promotes its first line (idempotence, Issue #374).
 
         Args:
             para: Paragraph as list of lines
@@ -455,7 +460,10 @@ class HeadingPromoter(PipelineComponent):
 
         # Combine paragraph text for matching
         para_text = " ".join([first_line] + [line.strip() for line in para[1:]])
-        check_text = para_text[:200].casefold()
+        # Only the first sentence is searched, so an EEO sentence after job content is not
+        # isolated together with that content (Issue #374).
+        first_sentence = self._first_sentence(para_text)
+        check_text = first_sentence[:200].casefold()
 
         # Check simple triggers
         for trigger in EEO_TRIGGERS:
@@ -463,10 +471,23 @@ class HeadingPromoter(PipelineComponent):
                 return True
 
         # Check "without regard to" with protected class pattern
-        if PROTECTED_CLASS_PATTERN.search(para_text[:400]):
+        if PROTECTED_CLASS_PATTERN.search(first_sentence[:400]):
             return True
 
         return False
+
+    @staticmethod
+    def _first_sentence(text: str) -> str:
+        """Return the text up to and including the first sentence-ending punctuation.
+
+        Args:
+            text: Single-line paragraph text
+
+        Returns:
+            The first sentence, or the whole text if no sentence end is found
+        """
+        match = FIRST_SENTENCE_END_PATTERN.search(text)
+        return text[: match.end()] if match else text
 
     def _is_empty_or_boilerplate(self, para: List[str]) -> bool:
         """Check if paragraph is empty or boilerplate (ADA/contact/accommodation).

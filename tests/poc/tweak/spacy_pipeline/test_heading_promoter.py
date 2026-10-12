@@ -1154,3 +1154,38 @@ class TestEEOAdaCaseSensitivity:
         result = promoter.process(text)
         assert result == expected
         assert promoter.process(result) == result
+
+
+class TestEEOFirstSentenceCandidacy:
+    """An EEO paragraph is a candidate only when its trigger is in the first sentence (Issue #374)."""
+
+    def test_eeo_sentence_after_job_content_left_alone(self) -> None:
+        """Job content sharing a paragraph with the EEO sentence is not isolated; text is unchanged."""
+        promoter = HeadingPromoter()
+        text = (
+            "We are hiring a data engineer to build pipelines. We are an equal opportunity employer.\n\n"
+            "Please contact HR."
+        )
+        result = promoter.process(text)
+        assert result == text
+        assert result.count("## Equal Opportunity Employer") == 0
+        assert promoter.process(result) == result
+
+    def test_protected_class_after_job_content_left_alone(self) -> None:
+        """A protected-class pattern that is not in the first sentence does not make the paragraph EEO."""
+        promoter = HeadingPromoter()
+        text = "More text.\n\nWe build data platforms. We hire without regard to race or sex."
+        result = promoter.process(text)
+        assert result == text
+        assert promoter.process(result) == result
+
+    def test_company_prefix_eeo_sentence_still_isolated(self) -> None:
+        """A short company-name prefix keeps the EEO sentence first, so it is isolated with following text."""
+        promoter = HeadingPromoter()
+        text = "More text.\n\nAcme is an equal opportunity employer. We value diversity."
+        expected = (
+            "More text.\n\n## Equal Opportunity Employer\n\nAcme is an equal opportunity employer. We value diversity."
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result
