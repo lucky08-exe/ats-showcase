@@ -644,33 +644,48 @@ class TestDetailedPerformanceMetrics:
         preprocessor: Preprocessor,
         chunker: SemanticChunker,
     ) -> None:
-        """Verify performance scales linearly with job count.
+        """Verify performance scales roughly linearly with job count.
+
+        Uses median-of-repeats timing with perf_counter() and a warm-up pass
+        to reduce single-sample noise from CI scheduling jitter (a single
+        time.time() sample was flaky; see CI run 38182114652 on PR #436).
+        Intent: catch non-linear blowups (e.g. O(n^2) chunking), not measure
+        precise absolute latency.
 
         Args:
             preprocessor: Preprocessor fixture
             chunker: Chunker fixture
         """
         job_counts = [1, 5, 10]
-        times = []
+        repeats = 5
+        medians: list[float] = []
 
-        for count in job_counts:
-            start = time.time()
+        def run_batch(count: int) -> float:
+            start = time.perf_counter()
             for job in SAMPLE_JOBS[:count]:
                 text = job["description"]
                 doc = preprocessor.nlp(text)  # type: ignore[misc]
                 _ = chunker.chunk(text, doc=doc)
-            elapsed_ms = (time.time() - start) * 1000
-            times.append(elapsed_ms / count)  # Per-job time
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            return elapsed_ms / count  # Per-job time
 
-        # Each batch should maintain similar per-job time (±35% variance acceptable)
-        # First batch may be slower due to model loading; later batches benefit from JIT warmup
-        for i in range(1, len(times)):
-            variance = abs(times[i] - times[0]) / times[0]
-            assert variance < 0.35, (
-                f"Performance variance too high: {times[0]:.1f}ms vs {times[i]:.1f}ms ({variance:.0%})"
+        for count in job_counts:
+            # Warm-up run absorbs first-call cost so it does not skew samples.
+            run_batch(count)
+            samples = [run_batch(count) for _ in range(repeats)]
+            medians.append(statistics.median(samples))
+
+        # Each batch should maintain similar per-job time (±50% variance
+        # acceptable). Medians of repeated perf_counter() samples are far less
+        # noisy than a single time.time() sample.
+        baseline = medians[0]
+        for i in range(1, len(medians)):
+            variance = abs(medians[i] - baseline) / baseline
+            assert variance < 0.50, (
+                f"Performance variance too high: {baseline:.1f}ms vs {medians[i]:.1f}ms ({variance:.0%})"
             )
 
-        logging.info(f"Performance scaling: {times} ms/job for counts {job_counts}")
+        logging.info(f"Performance scaling: {medians} ms/job (median of {repeats}) for counts {job_counts}")
 
 
 class TestComprehensiveEndToEnd:
