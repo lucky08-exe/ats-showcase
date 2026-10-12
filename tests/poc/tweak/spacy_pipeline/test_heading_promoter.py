@@ -1363,6 +1363,7 @@ class TestEEOFirstSentenceCandidacy:
             "Accommodation requests can be made through HR.",
             "Accommodation requests may be submitted to HR.",
             "If you require accommodation, let us know.",
+            "Should you require accommodation, let us know.",
         ],
     )
     def test_accommodation_request_phrasings_are_boilerplate(self, boilerplate_line: str) -> None:
@@ -1466,4 +1467,29 @@ class TestEEOMultiSentenceParagraphs:
         )
         result = promoter.process(text)
         assert result == expected
+        assert promoter.process(result) == result
+
+
+class TestEEOJobRequireAccommodationsNotBoilerplate:
+    """Job wording 'may require accommodations' is job content, not an accommodation notice (Issue #374 round 6)."""
+
+    def test_job_require_accommodations_sentence_not_boilerplate(self) -> None:
+        """A job sentence 'The role may require accommodations for travel.' blocks EEO isolation; text unchanged.
+
+        A preceding paragraph is needed: a single-paragraph document is returned unchanged regardless.
+        """
+        promoter = HeadingPromoter()
+        text = "More text.\n\nWe are an equal opportunity employer. The role may require accommodations for travel."
+        result = promoter.process(text)
+        assert result == text
+        assert "## Equal Opportunity Employer" not in result
+        assert promoter.process(result) == result
+
+    def test_job_require_accommodations_own_paragraph_blocks_isolation(self) -> None:
+        """A job paragraph after the EEO paragraph is not boilerplate, so the EEO paragraph is not isolated."""
+        promoter = HeadingPromoter()
+        text = "More text.\n\nAcme is an equal opportunity employer.\n\nThe role may require accommodations for travel."
+        result = promoter.process(text)
+        assert result == text
+        assert "## Equal Opportunity Employer" not in result
         assert promoter.process(result) == result
