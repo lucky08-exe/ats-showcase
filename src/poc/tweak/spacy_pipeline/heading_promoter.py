@@ -151,16 +151,28 @@ _SENTENCE_SPLIT_PATTERN = re.compile(r"(?<=[.!?])\s+")
 # (e.g. "You will build diversity dashboards.") is treated as EEO-ish and does not block isolation.
 EEO_CONTINUATION_PATTERN = re.compile(r"\b(diversity|diverse|inclusion|inclusive|belonging)\b", re.IGNORECASE)
 
-# "without regard to" followed by a protected-class term within ~60 chars (Issue #374 Defect 3).
+# "without regard to" or "on the basis of" followed by a protected-class term within ~60 chars
+# (Issue #374 Defect 3; "on the basis of" added in Issue #374 round 6).
 # Protected-class terms, singular and plural: race(s), color(s), religion(s)/religious, sex(es),
 # gender(s), national origin(s), age(s), disability/disabilities, veteran(s), sexual orientation(s),
 # marital status(es), genetic(s).
 PROTECTED_CLASS_PATTERN = re.compile(
-    r"without regard to\s+.{0,60}?\b(races?|colors?|religions?|religious|sex(?:es)?|genders?|"
+    r"(?:without regard to|on the basis of)\s+.{0,60}?\b(races?|colors?|religions?|religious|sex(?:es)?|genders?|"
     r"national origins?|ages?|disabilit(?:y|ies)|veterans?|sexual orientations?|marital status(?:es)?|"
     r"genetics?)\b",
     re.IGNORECASE,
 )
+
+# "do not discriminate" / "does not discriminate" (Issue #374 round 6). "does not discriminate" is an
+# EEO trigger; this pattern adds the plural "do not" form so that a second sentence such as
+# "We do not discriminate on the basis of race..." keeps the EEO paragraph a candidate.
+DISCRIMINATE_PATTERN = re.compile(r"\bdo(?:es)?\s+not\s+discriminate\b", re.IGNORECASE)
+
+# "encouraged to apply" (Issue #374 round 6), e.g. "Women, minorities, veterans and individuals with
+# disabilities are encouraged to apply." The phrase is generic, so it is accepted only as a sentence
+# after an EEO first sentence. Known limitation: a generic "Candidates with 5+ years are encouraged
+# to apply." sharing a paragraph with an EEO first sentence would be swept in; accepted.
+ENCOURAGED_TO_APPLY_PATTERN = re.compile(r"encouraged to apply", re.IGNORECASE)
 
 # ADA keyword and contact/email phrases, matched on word boundaries so that "ada" does not match
 # "Canada" or "adapt" (Issue #374). The ADA token is case-sensitive so the language "Ada"
@@ -531,6 +543,8 @@ class HeadingPromoter(PipelineComponent):
         if any(trigger in casefolded for trigger in EEO_TRIGGERS):
             return True
         if PROTECTED_CLASS_PATTERN.search(sentence):
+            return True
+        if DISCRIMINATE_PATTERN.search(sentence) or ENCOURAGED_TO_APPLY_PATTERN.search(sentence):
             return True
         if EEO_CONTINUATION_PATTERN.search(sentence):
             return True

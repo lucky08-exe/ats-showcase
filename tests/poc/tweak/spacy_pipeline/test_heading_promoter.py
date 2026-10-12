@@ -1415,3 +1415,55 @@ class TestEEOFirstSentenceCandidacy:
         result = promoter.process(text)
         assert result == expected
         assert promoter.process(result) == result
+
+
+class TestEEOMultiSentenceParagraphs:
+    """Legitimate multi-sentence EEO paragraphs are isolated together (Issue #374 round 6)."""
+
+    def test_do_not_discriminate_on_basis_of_isolated(self) -> None:
+        """'We do not discriminate on the basis of ...' as a second EEO sentence keeps the paragraph isolated."""
+        promoter = HeadingPromoter()
+        text = (
+            "More text.\n\nAcme is an equal opportunity employer. "
+            "We do not discriminate on the basis of race, color, religion, sex or national origin."
+        )
+        expected = (
+            "More text.\n\n## Equal Opportunity Employer\n\n"
+            "Acme is an equal opportunity employer. "
+            "We do not discriminate on the basis of race, color, religion, sex or national origin."
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result
+
+    def test_encouraged_to_apply_sentence_isolated(self) -> None:
+        """'... are encouraged to apply.' as a second EEO sentence keeps the paragraph isolated."""
+        promoter = HeadingPromoter()
+        text = (
+            "More text.\n\nAcme is an equal opportunity employer. "
+            "Women, minorities, veterans and individuals with disabilities are encouraged to apply."
+        )
+        expected = (
+            "More text.\n\n## Equal Opportunity Employer\n\n"
+            "Acme is an equal opportunity employer. "
+            "Women, minorities, veterans and individuals with disabilities are encouraged to apply."
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result
+
+    def test_on_basis_of_protected_class_sentence_isolated(self) -> None:
+        """'... on the basis of race, color ...' as a second sentence matches the widened protected-class lead-in."""
+        promoter = HeadingPromoter()
+        text = (
+            "More text.\n\nAcme is an equal opportunity employer. "
+            "Hiring decisions are made on the basis of race, color, religion, sex or national origin."
+        )
+        expected = (
+            "More text.\n\n## Equal Opportunity Employer\n\n"
+            "Acme is an equal opportunity employer. "
+            "Hiring decisions are made on the basis of race, color, religion, sex or national origin."
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result
