@@ -69,6 +69,10 @@ Compare the `spacy_load_cold_ms` value against the load target. Compare the medi
 - **Single-machine numbers.** Results depend on CPU, Python build, and spaCy version. Compare runs on the same machine only.
 - **Shared nlp.** `TechExtractor(nlp)` adds an `entity_ruler` to the `nlp` object used for parsing in the tech measurements. This happens once in the script.
 
+## Known deviation
+
+- **Model load count.** Issue #432 specified loading `en_core_web_md` once. `scripts/benchmark_poc_extraction.py` loads it 12 times at the default `--repeats 5` (2 × repeats + 2): `spacy.load` directly 6 times (one cold call at L142, then `--repeats` warm calls at L145), and `SkillExtractor(...)` 6 times (`--repeats` calls at L146, plus one at L148), each construction calling `spacy.load` in `src/poc/skills/extract_skills_a.py` L16. The extra loads are inside the timed model-load measurements and do not affect the other timings. Fix tracked in follow-up issue #448.
+
 ---
 
 ## Results
