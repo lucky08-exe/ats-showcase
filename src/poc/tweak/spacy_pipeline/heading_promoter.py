@@ -226,7 +226,7 @@ ACCOMMODATION_REQUEST_PATTERN = re.compile(
     r"\brequest\w*\s+(?:a\s+)?(?:reasonable\s+)?accommodations?\b|"
     r"\baccommodations?\s+requests?\s+(?:can|may|should|will)\s+be\s+(?:made|submitted|sent|directed)\b|"
     r"\b(?:if\s+you\s+require|should\s+you\s+require)\b[^.!?]{0,80}?\baccommodations?\b|"
-    r"\b(?:applicants|candidates|individuals|persons|those)\s+(?:who|whom)\s+require\w*\b[^.!?]{0,80}?\baccommodations?\b",
+    r"\b(?:applicants|candidates|individuals|persons|those|anyone|people|someone|all)\s+(?:who|whom)\s+require\w*\b[^.!?]{0,80}?\baccommodations?\b",
     re.IGNORECASE,
 )
 
