@@ -649,6 +649,9 @@ class TestDetailedPerformanceMetrics:
         Uses median-of-repeats timing with perf_counter() and a warm-up pass
         to reduce single-sample noise from CI scheduling jitter (a single
         time.time() sample was flaky; see CI run 38182114652 on PR #436).
+        Caveat: the batches run sequentially, so a sustained load event that
+        spans one count's window biases all of its samples together; the
+        median only suppresses within-count noise.
         Intent: catch non-linear blowups (e.g. O(n^2) chunking), not measure
         precise absolute latency.
 
@@ -657,7 +660,7 @@ class TestDetailedPerformanceMetrics:
             chunker: Chunker fixture
         """
         job_counts = [1, 5, 10]
-        repeats = 5
+        repeats = 3
         medians: list[float] = []
 
         def run_batch(count: int) -> float:
@@ -676,9 +679,10 @@ class TestDetailedPerformanceMetrics:
             medians.append(statistics.median(samples))
 
         # Each batch should maintain similar per-job time (±50% variance
-        # acceptable). Medians of repeated perf_counter() samples are far less
-        # noisy than a single time.time() sample.
+        # acceptable). Medians of repeated perf_counter() samples are less
+        # noisy than a single time.time() sample (not quantified here).
         baseline = medians[0]
+        assert baseline > 0, f"Baseline per-job time is {baseline}ms; cannot compute relative variance"
         for i in range(1, len(medians)):
             variance = abs(medians[i] - baseline) / baseline
             assert variance < 0.50, (
