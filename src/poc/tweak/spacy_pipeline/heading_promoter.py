@@ -136,6 +136,21 @@ PROTECTED_CLASS_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Single-word boilerplate keywords (ADA/contact/email notices). Matched on word
+# boundaries so that "ada" does not match "Canada" or "adapt" (Issue #374).
+BOILERPLATE_WORD_PATTERN = re.compile(
+    r"\b(?:accommodations?|ada|contact|disability|email)\b",
+    re.IGNORECASE,
+)
+
+# Multi-word boilerplate phrases, matched as plain substrings.
+BOILERPLATE_PHRASES: Tuple[str, ...] = (
+    "if you need",
+    "reasonable accommodation",
+    "please contact",
+    "get in touch",
+)
+
 
 class HeadingPromoter(PipelineComponent):
     """Promote plain-text section headings to markdown format.
@@ -413,25 +428,11 @@ class HeadingPromoter(PipelineComponent):
         if not text:
             return True
 
-        # Boilerplate keyword patterns
-        boilerplate_keywords = [
-            "accommodation",
-            "disability",
-            "ada",
-            "contact",
-            "email",
-            "if you need",
-            "reasonable accommodation",
-            "please contact",
-            "get in touch",
-        ]
+        if BOILERPLATE_WORD_PATTERN.search(text):
+            return True
 
         text_lower = text.lower()
-        for keyword in boilerplate_keywords:
-            if keyword in text_lower:
-                return True
-
-        return False
+        return any(phrase in text_lower for phrase in BOILERPLATE_PHRASES)
 
     def _should_promote(self, stripped_line: str, is_first: bool, prev_blank: bool) -> bool:
         """Check if a line is eligible for promotion (before checking against phrase set).

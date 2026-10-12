@@ -786,3 +786,56 @@ class TestHeadingPromoterDefectFixes:
         result1 = promoter.process(text)
         result2 = promoter.process(result1)
         assert result1 == result2
+
+
+class TestEEOBoilerplateWordBoundary:
+    """Single-word boilerplate keywords must match on word boundaries (Issue #374)."""
+
+    def test_canada_trailing_paragraph_not_boilerplate(self) -> None:
+        """'ada' inside 'Canada' is not boilerplate, so the EEO paragraph is not isolated."""
+        promoter = HeadingPromoter()
+        text = "More text.\n\nAcme is an equal opportunity employer.\n\nOffices are located in Canada."
+        result = promoter.process(text)
+        assert result == text
+        assert promoter.process(result) == result
+
+    def test_adapt_trailing_paragraph_not_boilerplate(self) -> None:
+        """'ada' inside 'adapt' is not boilerplate, so the EEO paragraph is not isolated."""
+        promoter = HeadingPromoter()
+        text = "More text.\n\nAcme is an equal opportunity employer.\n\nWe will adapt the role to your goals."
+        result = promoter.process(text)
+        assert result == text
+        assert promoter.process(result) == result
+
+    def test_please_contact_hr_for_ada_still_boilerplate(self) -> None:
+        """'Please contact HR for ADA accommodations.' is still boilerplate, so EEO is isolated."""
+        promoter = HeadingPromoter()
+        text = "More text.\n\nAcme is an equal opportunity employer.\n\nPlease contact HR for ADA accommodations."
+        expected = (
+            "More text.\n\n## Equal Opportunity Employer\n\n"
+            "Acme is an equal opportunity employer.\n\n"
+            "Please contact HR for ADA accommodations."
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result
+
+    @pytest.mark.parametrize(
+        "boilerplate_line",
+        [
+            "Requests for ADA support go to HR.",
+            "Send questions to hr@acme.com by email.",
+            "Reasonable accommodations are available on request.",
+        ],
+    )
+    def test_single_word_keywords_match_on_word(self, boilerplate_line: str) -> None:
+        """Single-word keywords (ADA, email, accommodations) still count as boilerplate."""
+        promoter = HeadingPromoter()
+        text = f"More text.\n\nAcme is an equal opportunity employer.\n\n{boilerplate_line}"
+        expected = (
+            "More text.\n\n## Equal Opportunity Employer\n\n"
+            f"Acme is an equal opportunity employer.\n\n{boilerplate_line}"
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result
