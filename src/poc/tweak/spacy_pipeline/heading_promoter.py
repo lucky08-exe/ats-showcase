@@ -558,12 +558,19 @@ class HeadingPromoter(PipelineComponent):
     def _is_eeo_ish_sentence(self, sentence: str) -> bool:
         """Check if a sentence after an EEO trigger is EEO, DEI or boilerplate wording.
 
+        The sentence is EEO-ish if any of these branches matches, checked in this order:
+        1. EEO_TRIGGERS: a substring of EEO_TRIGGERS (casefolded) appears in the sentence.
+        2. PROTECTED_CLASS_PATTERN: "without regard to" followed by a protected-class term.
+        3. DISCRIMINATE_PATTERN: a first-person, or on/against/based, discrimination disclaimer.
+        4. ENCOURAGED_TO_APPLY_PATTERN: "encouraged to apply".
+        5. EEO_CONTINUATION_PATTERN: DEI vocabulary (diversity, inclusion, belonging, ...).
+        6. Boilerplate fallback: the sentence is empty or _is_empty_or_boilerplate is True.
+
         Args:
             sentence: One sentence of a paragraph
 
         Returns:
-            True if the sentence has an EEO trigger, a protected-class pattern, DEI continuation
-            vocabulary, or is empty or boilerplate
+            True if any branch above matches, otherwise False (job content)
         """
         casefolded = sentence.casefold()
         if any(trigger in casefolded for trigger in EEO_TRIGGERS):
