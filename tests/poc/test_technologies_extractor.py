@@ -395,6 +395,49 @@ class TestTechExtractorPerformance:
         assert len(techs) > 0
 
 
+class TestTechExtractorAmbiguousTerms:
+    """go/spring/vue common-word false positives (#475)."""
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Go to the office.",
+            "Spring is a great season.",
+            "We will vue the results",
+        ],
+    )
+    def test_common_word_not_extracted(self, extractor, nlp, text):
+        techs = extractor.extract(nlp(text))
+        assert not set(techs) & {"go", "spring", "vue"}
+
+    @pytest.mark.parametrize(
+        "text,expected",
+        [
+            ("Built with Go and gRPC.", "go"),
+            ("Spring Boot microservices.", "spring"),
+            ("Vue.js frontend.", "vue.js"),
+        ],
+    )
+    def test_tech_usage_extracted(self, extractor, nlp, text, expected):
+        techs = extractor.extract(nlp(text))
+        assert expected in techs
+
+
+class TestTechExtractorHyphenatedTerms:
+    """Hyphenated multi-word TECH_TERMS must match spaCy's split tokens (#476)."""
+
+    @pytest.mark.parametrize(
+        "text,expected",
+        [
+            ("We use anchor-free detectors for weeds.", "anchor-free detectors"),
+            ("Experience with real-time inference on GPUs.", "real-time inference"),
+            ("Anchor-Free Detectors are great.", "anchor-free detectors"),
+        ],
+    )
+    def test_hyphenated_term_extracted(self, extractor, nlp, text, expected):
+        assert expected in extractor.extract(nlp(text))
+
+
 class TestTechExtractorPatternGeneration:
     """Test pattern generation from TECH_TERMS."""
 

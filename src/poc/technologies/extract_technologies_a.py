@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 
 import spacy
 
@@ -12,16 +13,46 @@ def _generate_patterns():
     patterns = []
     for term in TECH_TERMS:
         # Check if it's a multi-word phrase
-        if " " in term:
+        if " " in term or "-" in term:
             # Phrase pattern: Case-insensitive by using the text logic
             # 'computer vision' -> [{'LOWER': 'computer'}, {'LOWER': 'vision'}]
-            tokens = term.lower().split()
+            # spaCy splits intra-word hyphens into 3 tokens, so emit '-' too:
+            # 'anchor-free' -> [{'LOWER': 'anchor'}, {'LOWER': '-'}, {'LOWER': 'free'}]
+            tokens = re.findall(r"[^\s-]+|-", term.lower())
             patterns.append({"label": "TECH", "pattern": [{"LOWER": t} for t in tokens]})
         else:
             # Single word pattern: Simple case-insensitive token match
             # 'PyTorch' -> {'LOWER': 'pytorch'}
             patterns.append({"label": "TECH", "pattern": [{"LOWER": term.lower()}]})
+    # Vue.js: tokenizer may keep it whole or split on the dot
+    patterns.append({"label": "TECH", "pattern": [{"LOWER": "vue.js"}]})
+    patterns.append({"label": "TECH", "pattern": [{"LOWER": "vue"}, {"ORTH": "."}, {"LOWER": "js"}]})
     return patterns
+
+
+AMBIGUOUS_TERMS = frozenset({"go", "spring", "vue"})
+_PREV_CUES = frozenset({"with", "in", "using", "use", "built", "written", "proficient", "experience", "of", "on"})
+_NEXT_CUES = frozenset({"boot", "framework", "mvc", "cloud", "data", "security", "lang", "js"})
+_LIST_JOINERS = frozenset({",", "and", "&", "/", "or"})
+
+
+def _is_tech_context(doc, ent, other_techs):
+    """Require capitalization plus a tech cue for ambiguous common-word terms."""
+    if ent.text == ent.text.lower():
+        return False
+    nxt = doc[ent.end] if ent.end < len(doc) else None
+    prev = doc[ent.start - 1] if ent.start > 0 else None
+    if nxt is not None and (nxt.lower_ in _NEXT_CUES or doc.text[nxt.idx :].startswith(".js")):
+        return True
+    if prev is not None and prev.lower_ in _PREV_CUES:
+        return True
+    # Adjacent to another TECH match (optionally across a list joiner)
+    for tok_idx, step in ((ent.end, 1), (ent.start - 1, -1)):
+        if 0 <= tok_idx < len(doc) and doc[tok_idx].lower_ in _LIST_JOINERS:
+            tok_idx += step
+        if 0 <= tok_idx < len(doc) and tok_idx in other_techs:
+            return True
+    return False
 
 
 class TechExtractor:
@@ -38,7 +69,15 @@ class TechExtractor:
         try:
             # Extract all TECH entities and normalize to lowercase for deduplication
             # This handles case-insensitive matching results (PyTorch vs pytorch)
-            techs_lower = {ent.text.lower() for ent in doc.ents if ent.label_ == "TECH"}
+            tech_ents = [ent for ent in doc.ents if ent.label_ == "TECH"]
+            unambiguous_tokens = {
+                i for ent in tech_ents if ent.text.lower() not in AMBIGUOUS_TERMS for i in range(ent.start, ent.end)
+            }
+            techs_lower = {
+                ent.text.lower()
+                for ent in tech_ents
+                if ent.text.lower() not in AMBIGUOUS_TERMS or _is_tech_context(doc, ent, unambiguous_tokens)
+            }
             return sorted(techs_lower)
         except Exception as e:
             logger.error(f"Extraction failed: {e}")
