@@ -352,7 +352,10 @@ class HeadingPromoter(PipelineComponent):
         # the paragraph matches on the sentence, not on the heading line. Phase 2 promotes the
         # heading line to "## ...", so a synthetic heading would give two headings for one block.
         # Return unchanged; the outcome is plain promotion of the existing line.
-        normalized = self._normalize(first_line_stripped)
+        # Heading marker and emphasis characters are stripped first, as Guard 5 does, so that
+        # "# Benefits", "__Benefits__" and "_Benefits_" are recognised as the known heading.
+        heading_text = HEADING_PREFIX_PATTERN.sub("", first_line_stripped).strip("*_: ")
+        normalized = self._normalize(heading_text)
         if normalized in self._headings:
             return text
 

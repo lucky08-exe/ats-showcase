@@ -1178,6 +1178,27 @@ class TestEEOHeadingPrefixGuards:
         assert promoter.process(result) == result
 
 
+class TestEEOGuard2DecoratedHeading:
+    """Guard 2 recognises a known heading line decorated with '#' or '*_:' (Issue #374)."""
+
+    @pytest.mark.parametrize(
+        "heading_line",
+        ["__Benefits__", "_Benefits_", "# Benefits", "**Benefits**"],
+    )
+    def test_decorated_heading_line_in_eeo_paragraph_skips_insertion(self, heading_line: str) -> None:
+        """A decorated known heading sharing a paragraph with the EEO sentence stops insertion; text is unchanged.
+
+        '**Benefits**' is already excluded by the bullet check in _is_eeo_paragraph, so it passes
+        through that check rather than Guard 2; it is kept as a regression guard.
+        """
+        promoter = HeadingPromoter()
+        text = f"More text.\n\n{heading_line}\nWe are an equal opportunity employer.\n\nPlease contact HR."
+        result = promoter.process(text)
+        assert result == text
+        assert result.count("## Equal Opportunity Employer") == 0
+        assert promoter.process(result) == result
+
+
 class TestEEOFirstSentenceCandidacy:
     """An EEO paragraph is a candidate only when its trigger is in the first sentence (Issue #374)."""
 
