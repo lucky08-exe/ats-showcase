@@ -144,6 +144,9 @@ HEADING_PREFIX_PATTERN = re.compile(r"^#{1,6}\s+")
 FIRST_SENTENCE_END_PATTERN = re.compile(r"[.!?](?=\s)")
 
 # Sentence boundary used to examine every sentence after the first (Issue #374).
+# Known limitation (accepted): this splits after abbreviations such as "U.S.", so "Acme is an equal
+# opportunity employer. Applicants from the U.S. are welcome." is not isolated: the fragment
+# "Applicants from the U.S." is not EEO-ish and blocks isolation.
 _SENTENCE_SPLIT_PATTERN = re.compile(r"(?<=[.!?])\s+")
 
 # DEI vocabulary that may follow an EEO sentence in the same paragraph (Issue #374).
