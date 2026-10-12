@@ -208,7 +208,7 @@ class TestSkillExtractorFixtures:
         found_verbs = set()
         for skill in skills:
             for verb in expected_verbs:
-                if verb in skill:
+                if verb in skill.split():
                     found_verbs.add(verb)
 
         # Should find at least 50% of expected verbs
@@ -287,11 +287,11 @@ class TestSkillExtractorSorting:
         assert skills == sorted(skills)
 
     def test_sorted_case_insensitive(self, extractor):
-        """Sorting is case-insensitive (all lowercase)."""
-        text = "Own solutions. Design architectures. Lead teams."
+        """Mixed-case input yields sorted, lowercase output."""
+        text = "Design systems and BUILD tools and Manage teams"
         skills = extractor.extract(text)
-        # All lowercase already, and sorted
         assert skills == sorted(skills)
+        assert all(s.islower() for s in skills)
 
 
 class TestSkillExtractorPerformance:
