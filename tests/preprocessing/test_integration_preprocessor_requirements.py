@@ -20,7 +20,7 @@ def preprocessor() -> Preprocessor:
         return Preprocessor(extract_requirements=True)
     except OSError:
         pytest.skip("spaCy model not available")
-        return None  # type: ignore
+        return None  # type: ignore[return-value]
 
 
 @pytest.fixture
