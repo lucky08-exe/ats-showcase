@@ -114,11 +114,15 @@ KNOWN_PLAIN_HEADINGS: FrozenSet[str] = frozenset(
     ]
 )
 
-# EEO phrase triggers for Issue #374 (small, high-precision set)
-# Matched case-insensitively in first ~200 chars of paragraph
 # Normalised form of the synthesized heading, used by Guard 5 to detect an existing EEO heading.
 EEO_HEADING_NORMALIZED = "equal opportunity employer"
 
+# EEO phrase triggers for Issue #374 (small, high-precision set)
+# Matched case-insensitively in first ~200 chars of paragraph.
+# Known limitation: "is an equal opportunity" and "does not discriminate" are generic and can
+# false-positive on non-EEO sentences, e.g. "This is an equal opportunity to grow your career."
+# followed by a boilerplate paragraph ("Please contact HR.") is isolated under an EEO heading.
+# Accepted for now; tightening the phrases would change detection behaviour, so it is not done here.
 EEO_TRIGGERS: FrozenSet[str] = frozenset(
     [
         "equal opportunity employer",
