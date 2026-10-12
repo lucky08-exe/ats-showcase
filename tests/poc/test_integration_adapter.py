@@ -77,7 +77,14 @@ def test_tech_failure_isolated(adapter: CombinedExtractor, monkeypatch: pytest.M
 
 
 def test_output_matches_expected_schema_structure(adapter: CombinedExtractor) -> None:
-    """Output structurally matches docs/dev-note/poc/expected_output_schema.json."""
+    """Output structurally matches docs/dev-note/poc/expected_output_schema.json.
+
+    Hand-rolled on purpose (Issue #447): the checks are driven by the schema file
+    (required keys, additionalProperties, array type, uniqueItems). The schema only
+    documents sorted/lowercase output in prose, and JSON Schema cannot express either,
+    so those are asserted here. A jsonschema dev dependency would still need both
+    hand-written asserts, so it is not used.
+    """
     schema: dict[str, Any] = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
     result = adapter.extract(JD_SENTENCE)
 
