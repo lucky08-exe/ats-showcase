@@ -213,6 +213,7 @@ class HeadingPromoter(PipelineComponent):
                     normalized = self._normalize(stripped)
                     if normalized in self._headings:
                         # Promote: preserve leading/trailing whitespace from original line
+                        # Extract the part of the line that should become the heading
                         promoted = "## " + stripped.rstrip(":").strip()
                         result_lines.append(promoted)
                     else:
@@ -433,7 +434,7 @@ class HeadingPromoter(PipelineComponent):
         return False
 
     def _should_promote(self, stripped_line: str, is_first: bool, prev_blank: bool) -> bool:
-        """Check if a line is eligible for promotion.
+        """Check if a line is eligible for promotion (before checking against phrase set).
 
         Args:
             stripped_line: The line after calling .strip()
@@ -441,7 +442,7 @@ class HeadingPromoter(PipelineComponent):
             prev_blank: True if the previous line was blank or first line
 
         Returns:
-            True if the line passes structural checks
+            True if the line passes structural checks (not already formatted, correct position)
         """
         # Empty lines cannot be promoted
         if not stripped_line:
@@ -451,15 +452,15 @@ class HeadingPromoter(PipelineComponent):
         if stripped_line[0] in "#*-+|":
             return False
 
-        # Must not start with digit (list indicator)
+        # Must not start with digit (list indicator like "1. ", "2. ")
         if stripped_line[0].isdigit():
             return False
 
-        # Must not be already formatted as bold
+        # Must not be already formatted as bold (**...**)
         if stripped_line.startswith("**") and stripped_line.endswith("**"):
             return False
 
-        # Must not contain list-like patterns
+        # Must not contain list-like patterns (digit followed by . or ))
         if re.match(r"^\d+[\.\)]", stripped_line):
             return False
 
@@ -474,9 +475,9 @@ class HeadingPromoter(PipelineComponent):
 
         Transformations:
         - Convert to lowercase (casefold for Unicode)
-        - Normalize apostrophes
-        - Collapse multiple spaces
-        - Strip trailing ':'
+        - Normalize apostrophes (' and ' both become ')
+        - Collapse multiple spaces to single space
+        - Strip trailing ':' and whitespace
         - Strip leading/trailing whitespace
 
         Args:
@@ -488,7 +489,7 @@ class HeadingPromoter(PipelineComponent):
         # Lowercase
         text = text.casefold()
 
-        # Normalise apostrophes
+        # Normalise apostrophes (both straight ' and curly ')
         text = text.replace("'", "'").replace("'", "'")
 
         # Collapse multiple spaces
