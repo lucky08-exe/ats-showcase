@@ -573,8 +573,9 @@ class HeadingPromoter(PipelineComponent):
         if BOILERPLATE_WORD_PATTERN.search(text):
             return True
 
-        # Strip a markdown heading marker so "## Accommodations" counts as a bare label.
-        label_text = HEADING_PREFIX_PATTERN.sub("", text).strip()
+        # Strip a markdown heading marker and emphasis so "## Accommodations", "**Accommodations**"
+        # and "_Accommodations_" count as a bare label (Issue #374).
+        label_text = HEADING_PREFIX_PATTERN.sub("", text).strip().strip("*_: ")
         if ACCOMMODATION_REQUEST_PATTERN.search(text) or ACCOMMODATION_LABEL_PATTERN.fullmatch(label_text):
             return True
 

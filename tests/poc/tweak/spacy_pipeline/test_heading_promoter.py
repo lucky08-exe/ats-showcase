@@ -1396,3 +1396,18 @@ class TestEEOFirstSentenceCandidacy:
         result = promoter.process(text)
         assert result == expected
         assert promoter.process(result) == result
+
+    @pytest.mark.parametrize(
+        "label_line",
+        ["**Accommodations**", "_Accommodations_", "__Accommodations__"],
+    )
+    def test_emphasised_accommodations_label_is_boilerplate(self, label_line: str) -> None:
+        """A bold or italic bare 'Accommodations' label is boilerplate once emphasis is stripped; EEO is isolated."""
+        promoter = HeadingPromoter()
+        text = f"More text.\n\nAcme is an equal opportunity employer.\n\n{label_line}"
+        expected = (
+            f"More text.\n\n## Equal Opportunity Employer\n\nAcme is an equal opportunity employer.\n\n{label_line}"
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result
