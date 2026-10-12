@@ -957,3 +957,48 @@ class TestEEOSilentSkipGuards:
         assert result == expected
         assert result.count("## Equal Opportunity Employer") == 1
         assert promoter.process(result) == result
+
+
+class TestMixedLineEndings:
+    """Mixed CRLF/LF input is normalised to the first line ending detected (Issue #374)."""
+
+    def test_mixed_lf_first_normalised_to_lf(self) -> None:
+        """First newline is LF, so the CRLF in the trailing paragraph break becomes LF."""
+        promoter = HeadingPromoter()
+        text = (
+            "More text.\n\nAcme is an equal opportunity employer.\r\n\r\n"
+            "If you need accommodation, contact hr@acme.com."
+        )
+        expected = (
+            "More text.\n\n## Equal Opportunity Employer\n\n"
+            "Acme is an equal opportunity employer.\n\n"
+            "If you need accommodation, contact hr@acme.com."
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert "\r" not in result
+        assert promoter.process(result) == result
+
+    def test_mixed_crlf_first_normalised_to_crlf(self) -> None:
+        """First newline is CRLF, so the bare LF breaks in the input become CRLF."""
+        promoter = HeadingPromoter()
+        text = (
+            "More text.\r\n\nAcme is an equal opportunity employer.\n\nIf you need accommodation, contact hr@acme.com."
+        )
+        expected = (
+            "More text.\r\n\r\n## Equal Opportunity Employer\r\n\r\n"
+            "Acme is an equal opportunity employer.\r\n\r\n"
+            "If you need accommodation, contact hr@acme.com."
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result
+
+    def test_crlf_only_heading_promotion_keeps_crlf(self) -> None:
+        """CRLF-only input: promoted heading and untouched lines all keep CRLF."""
+        promoter = HeadingPromoter()
+        text = "Job Description\r\nContent below.\r\n"
+        expected = "## Job Description\r\nContent below.\r\n"
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result

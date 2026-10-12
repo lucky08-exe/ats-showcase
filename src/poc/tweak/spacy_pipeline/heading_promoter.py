@@ -207,10 +207,17 @@ class HeadingPromoter(PipelineComponent):
             >>> "## Job Description" in result
             True
         """
+        original = text
         try:
             # Handle empty input
             if not text:
                 return text
+
+            # Normalise line endings to the first one detected (CRLF or LF) so that
+            # mixed input produces uniform output. Everything below works on LF.
+            first_newline = text.find("\n")
+            line_ending = "\r\n" if first_newline > 0 and text[first_newline - 1] == "\r" else "\n"
+            text = text.replace("\r\n", "\n")
 
             # Phase 1: Isolate trailing EEO paragraphs
             text = self._isolate_eeo_paragraphs(text)
@@ -236,12 +243,15 @@ class HeadingPromoter(PipelineComponent):
                 else:
                     result_lines.append(line)
 
-            return "\n".join(result_lines)
+            result = "\n".join(result_lines)
+            if line_ending == "\r\n":
+                result = result.replace("\n", "\r\n")
+            return result
 
         except Exception as e:
             # Non-fatal: log and return original text
             logger.warning(f"Error in heading_promoter.process(): {e}")
-            return text
+            return original
 
     def _isolate_eeo_paragraphs(self, text: str) -> str:
         """Isolate trailing EEO paragraphs by inserting a synthesized heading.
@@ -255,7 +265,8 @@ class HeadingPromoter(PipelineComponent):
         Idempotent: repeated calls produce same result.
 
         Args:
-            text: Input text with possible EEO paragraphs
+            text: LF-normalised input text with possible EEO paragraphs (process() converts
+                CRLF to LF before calling this method)
 
         Returns:
             Text with EEO paragraphs isolated under a heading if conditions are met
@@ -263,8 +274,8 @@ class HeadingPromoter(PipelineComponent):
         if not text:
             return text
 
-        # Detect line ending type (CRLF or LF) and preserve original trailing newline status
-        line_ending = "\r\n" if "\r\n" in text else "\n"
+        # Input is LF-normalised by process(); preserve original trailing newline status
+        line_ending = "\n"
         has_trailing_newline = text.endswith(line_ending)
 
         lines = text.split(line_ending)
