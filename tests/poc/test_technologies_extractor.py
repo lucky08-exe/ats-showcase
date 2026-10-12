@@ -423,6 +423,21 @@ class TestTechExtractorAmbiguousTerms:
         assert expected in techs
 
 
+class TestTechExtractorHyphenatedTerms:
+    """Hyphenated multi-word TECH_TERMS must match spaCy's split tokens (#476)."""
+
+    @pytest.mark.parametrize(
+        "text,expected",
+        [
+            ("We use anchor-free detectors for weeds.", "anchor-free detectors"),
+            ("Experience with real-time inference on GPUs.", "real-time inference"),
+            ("Anchor-Free Detectors are great.", "anchor-free detectors"),
+        ],
+    )
+    def test_hyphenated_term_extracted(self, extractor, nlp, text, expected):
+        assert expected in extractor.extract(nlp(text))
+
+
 class TestTechExtractorPatternGeneration:
     """Test pattern generation from TECH_TERMS."""
 

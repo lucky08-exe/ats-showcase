@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 
 import spacy
 
@@ -12,10 +13,12 @@ def _generate_patterns():
     patterns = []
     for term in TECH_TERMS:
         # Check if it's a multi-word phrase
-        if " " in term:
+        if " " in term or "-" in term:
             # Phrase pattern: Case-insensitive by using the text logic
             # 'computer vision' -> [{'LOWER': 'computer'}, {'LOWER': 'vision'}]
-            tokens = term.lower().split()
+            # spaCy splits intra-word hyphens into 3 tokens, so emit '-' too:
+            # 'anchor-free' -> [{'LOWER': 'anchor'}, {'LOWER': '-'}, {'LOWER': 'free'}]
+            tokens = re.findall(r"[^\s-]+|-", term.lower())
             patterns.append({"label": "TECH", "pattern": [{"LOWER": t} for t in tokens]})
         else:
             # Single word pattern: Simple case-insensitive token match
