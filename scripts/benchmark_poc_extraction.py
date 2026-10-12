@@ -134,19 +134,42 @@ def bench_size(
     }
 
 
+def sanity_check(skill: SkillExtractor, tech: TechExtractor, nlp: Language, text: str) -> None:
+    """Fail loudly if either extractor returns nothing on the fixture text.
+
+    Without this, the timings could measure no-op runs. SkillExtractor.extract
+    swallows exceptions and returns [], so an empty result is the only signal.
+
+    Raises:
+        RuntimeError: If skill or tech extraction returns an empty result.
+    """
+    skill_out = skill.extract(text)
+    if not skill_out:
+        raise RuntimeError("sanity check failed: SkillExtractor returned no skills on fixture text")
+    tech_out = tech.extract(nlp(text))
+    if not tech_out:
+        raise RuntimeError("sanity check failed: TechExtractor returned no technologies on fixture text")
+
+
 def run_benchmark(repeats: int) -> dict[str, Any]:
-    """Run all measurements and return a JSON-serializable result dict."""
+    """Run all measurements and return a JSON-serializable result dict.
+
+    The spaCy model is loaded exactly once; the same pipeline is shared by
+    SkillExtractor and TechExtractor so timings are not skewed by reloads.
+    The single cold load is the model-load measurement.
+    """
     base_text = load_fixture_text()
 
     cold_start = time.perf_counter()
     nlp = spacy.load(MODEL_NAME)
     spacy_cold_ms = (time.perf_counter() - cold_start) * 1000.0
+    spacy_load_stats = summarize([spacy_cold_ms])
 
-    spacy_load_samples = time_calls(lambda: spacy.load(MODEL_NAME), repeats)
-    skill_init_samples = time_calls(lambda: SkillExtractor(model_name=MODEL_NAME), repeats)
+    skill_init_samples = time_calls(lambda: SkillExtractor(model_name=MODEL_NAME, nlp=nlp), repeats)
 
-    skill = SkillExtractor(model_name=MODEL_NAME)
+    skill = SkillExtractor(model_name=MODEL_NAME, nlp=nlp)
     tech = TechExtractor(nlp)
+    sanity_check(skill, tech, nlp, base_text)
     base_tokens = len(nlp(base_text))
 
     sizes: dict[str, Any] = {}
@@ -159,7 +182,7 @@ def run_benchmark(repeats: int) -> dict[str, Any]:
         "repeats": repeats,
         "model_load": {
             "spacy_load_cold_ms": round(spacy_cold_ms, 3),
-            "spacy_load_ms": summarize(spacy_load_samples),
+            "spacy_load_ms": spacy_load_stats,
             "skill_extractor_init_ms": summarize(skill_init_samples),
         },
         "sizes": sizes,
@@ -220,6 +243,9 @@ def main(argv: list[str] | None = None) -> int:
     except FileNotFoundError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
+    except RuntimeError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     except OSError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

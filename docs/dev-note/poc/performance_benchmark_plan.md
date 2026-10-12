@@ -9,8 +9,8 @@ Script: `scripts/benchmark_poc_extraction.py`
 ## What Is Measured
 
 **(a) Model load time**
-- `spacy.load("en_core_web_md")`: one cold call (first load in the process), then `--repeats` warm in-process loads (min/median/max).
-- `SkillExtractor(model_name="en_core_web_md")` construction: `--repeats` calls (min/median/max). Each construction loads its own spaCy pipeline.
+- `spacy.load("en_core_web_md")`: one cold call (first and only load in the process; reported as a single sample, min = median = max).
+- `SkillExtractor(model_name="en_core_web_md")` construction with the shared pre-loaded `nlp`: `--repeats` calls (min/median/max). Measures Matcher setup only, not a model load.
 
 **(b) Extraction latency** at three input sizes (min/median/max ms over `--repeats` calls, one untimed warm-up call first):
 - Sizes (targets): small (~100), medium (~1000), large (~5000); actual counts differ, see caveats. Built by repeating the two POC fixtures (`tests/poc/fixtures/raw_jd_what_you_ll_do.md`, `tests/poc/fixtures/raw_jd_knowledge_skills_abilities.md`). Actual token counts are reported.
@@ -62,7 +62,7 @@ Compare the `spacy_load_cold_ms` value against the load target. Compare the medi
 
 - **spaCy parse dominates.** Both extractors spend most time in `nlp(text)`. `TechExtractor.extract(doc)` is a loop over `doc.ents`, so the tech extraction row is small by comparison. Read the `tech_parse_ms` row as the main cost.
 - **tracemalloc undercounts native memory.** It only traces Python-level allocations routed through the Python allocator. Memory allocated directly by Cython/C code inside spaCy (and vector data) may be missing from the peak. Treat peak values as lower bounds.
-- **"Cold" is per process, not per OS.** The cold load is the first `spacy.load` in the script. The OS file cache may still be warm. Warm repeats are in-process only.
+- **"Cold" is per process, not per OS.** The cold load is the only `spacy.load` in the script. The OS file cache may still be warm.
 - **Small size is not ~100 tokens.** Inputs are whole repeats of the fixtures, so the smallest input is one fixture pass, which is more than ~100. The `Tokens` column is authoritative.
 - **Warm-up call excluded.** Each extraction measurement runs one untimed call before the timed repeats.
 - **Timer.** `time.perf_counter()` for all latency values.
@@ -71,7 +71,7 @@ Compare the `spacy_load_cold_ms` value against the load target. Compare the medi
 
 ## Known deviation
 
-- **Model load count.** Issue #432 specified loading `en_core_web_md` once. `scripts/benchmark_poc_extraction.py` loads it 12 times at the default `--repeats 5` (2 × repeats + 2): `spacy.load` directly 6 times (one cold call at L142, then `--repeats` warm calls at L145), and `SkillExtractor(...)` 6 times (`--repeats` calls at L146, plus one at L148), each construction calling `spacy.load` in `src/poc/skills/extract_skills_a.py` L16. The extra loads are inside the timed model-load measurements and do not affect the other timings. Fix tracked in follow-up issue #448.
+- **Model load count (resolved in #448).** The script now loads `en_core_web_md` once per run. The same `nlp` is passed to `SkillExtractor(model_name=..., nlp=nlp)` and `TechExtractor(nlp)`, so the SkillExtractor construction timings measure only Matcher setup, not a model load. `spacy_load_ms` is now the single cold-load sample (min = median = max), not warm repeats.
 
 ---
 
@@ -84,7 +84,6 @@ All result cells are placeholders until the benchmark is run. No values have bee
 | Metric | min (ms) | median (ms) | max (ms) |
 |--------|----------|-------------|----------|
 | `spacy.load` cold (single call) | PENDING-RUN | PENDING-RUN | PENDING-RUN |
-| `spacy.load` warm repeats | PENDING-RUN | PENDING-RUN | PENDING-RUN |
 | `SkillExtractor` init | PENDING-RUN | PENDING-RUN | PENDING-RUN |
 
 ### Extraction latency
