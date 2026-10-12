@@ -143,6 +143,14 @@ HEADING_PREFIX_PATTERN = re.compile(r"^#{1,6}\s+")
 # paragraph is only a candidate when its trigger sits in this first sentence.
 FIRST_SENTENCE_END_PATTERN = re.compile(r"[.!?](?=\s)")
 
+# Sentence boundary used to examine every sentence after the first (Issue #374).
+_SENTENCE_SPLIT_PATTERN = re.compile(r"(?<=[.!?])\s+")
+
+# DEI vocabulary that may follow an EEO sentence in the same paragraph (Issue #374).
+# Known limitation: hand-picked DEI vocabulary, so a job sentence that contains "diversity"
+# (e.g. "You will build diversity dashboards.") is treated as EEO-ish and does not block isolation.
+EEO_CONTINUATION_PATTERN = re.compile(r"\b(diversity|diverse|inclusion|inclusive|belonging)\b", re.IGNORECASE)
+
 # "without regard to" followed by a protected-class term within ~60 chars (Issue #374 Defect 3).
 # Protected-class terms, singular and plural: race(s), color(s), religion(s)/religious, sex(es),
 # gender(s), national origin(s), age(s), disability/disabilities, veteran(s), sexual orientation(s),
@@ -483,16 +491,39 @@ class HeadingPromoter(PipelineComponent):
         first_sentence = self._first_sentence(para_text)
         check_text = first_sentence[:200].casefold()
 
-        # Check simple triggers
-        for trigger in EEO_TRIGGERS:
-            if trigger in check_text:
-                return True
+        # Check simple triggers, then "without regard to" with protected class pattern
+        triggered = any(trigger in check_text for trigger in EEO_TRIGGERS) or bool(
+            PROTECTED_CLASS_PATTERN.search(first_sentence[:400])
+        )
+        if not triggered:
+            return False
 
-        # Check "without regard to" with protected class pattern
-        if PROTECTED_CLASS_PATTERN.search(first_sentence[:400]):
+        # A paragraph whose later sentences are job content is not an EEO paragraph (Issue #374).
+        # Only the sentences after the first are checked; the first one has already passed.
+        for sentence in _SENTENCE_SPLIT_PATTERN.split(para_text)[1:]:
+            if not self._is_eeo_ish_sentence(sentence):
+                return False
+
+        return True
+
+    def _is_eeo_ish_sentence(self, sentence: str) -> bool:
+        """Check if a sentence after an EEO trigger is EEO, DEI or boilerplate wording.
+
+        Args:
+            sentence: One sentence of a paragraph
+
+        Returns:
+            True if the sentence has an EEO trigger, a protected-class pattern, DEI continuation
+            vocabulary, or is empty or boilerplate
+        """
+        casefolded = sentence.casefold()
+        if any(trigger in casefolded for trigger in EEO_TRIGGERS):
             return True
-
-        return False
+        if PROTECTED_CLASS_PATTERN.search(sentence):
+            return True
+        if EEO_CONTINUATION_PATTERN.search(sentence):
+            return True
+        return self._is_empty_or_boilerplate([sentence])
 
     @staticmethod
     def _first_sentence(text: str) -> str:

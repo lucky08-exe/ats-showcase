@@ -1329,3 +1329,26 @@ class TestEEOFirstSentenceCandidacy:
         result = promoter.process(text)
         assert result == expected
         assert promoter.process(result) == result
+
+    def test_eeo_paragraph_with_job_sentence_after_it_left_alone(self) -> None:
+        """A later job sentence in the EEO paragraph makes the whole paragraph a non-candidate; unchanged."""
+        promoter = HeadingPromoter()
+        text = (
+            "More text.\n\nWe are an equal opportunity employer. You will build APIs in Python.\n\nPlease contact HR."
+        )
+        result = promoter.process(text)
+        assert result == text
+        assert result.count("## Equal Opportunity Employer") == 0
+        assert promoter.process(result) == result
+
+    def test_eeo_paragraph_with_eeo_ish_second_sentence_isolated(self) -> None:
+        """A second sentence with a trigger ('does not discriminate') keeps the paragraph an EEO candidate."""
+        promoter = HeadingPromoter()
+        text = "More text.\n\nAcme is an equal opportunity employer. It does not discriminate."
+        expected = (
+            "More text.\n\n## Equal Opportunity Employer\n\n"
+            "Acme is an equal opportunity employer. It does not discriminate."
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result
