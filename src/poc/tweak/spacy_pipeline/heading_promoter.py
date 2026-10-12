@@ -460,10 +460,12 @@ class HeadingPromoter(PipelineComponent):
         # Build result with inserted lines
         result_lines = list(lines)
         if split_glued_heading:
-            # Keep the known heading line where it is; the EEO sentence(s) follow a blank line
-            # and the synthetic heading, so Phase 2 promotes only the known heading.
+            # Keep the known heading line where it is; a blank line, the synthetic EEO heading and a
+            # blank line follow it, matching the standard insertion layout. Phase 2 promotes only
+            # the known heading.
             result_lines.insert(insert_line_idx + 1, "")
             result_lines.insert(insert_line_idx + 2, "## Equal Opportunity Employer")
+            result_lines.insert(insert_line_idx + 3, "")
         else:
             # Insert heading and blank line before EEO paragraph at its start index
             result_lines.insert(insert_line_idx, "## Equal Opportunity Employer")

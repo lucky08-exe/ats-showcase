@@ -1075,7 +1075,7 @@ class TestMixedLineEndings:
         """#493: 'Benefits' sharing a paragraph with an EEO sentence is split from it, with a synthetic EEO heading."""
         promoter = HeadingPromoter()
         text = "More text.\n\nBenefits\nWe are an equal opportunity employer."
-        expected = "More text.\n\n## Benefits\n\n## Equal Opportunity Employer\nWe are an equal opportunity employer."
+        expected = "More text.\n\n## Benefits\n\n## Equal Opportunity Employer\n\nWe are an equal opportunity employer."
         result = promoter.process(text)
         assert result == expected
         assert promoter.process(result) == result
@@ -1085,7 +1085,7 @@ class TestMixedLineEndings:
         promoter = HeadingPromoter()
         text = "Benefits\nWe are an equal opportunity employer and do not discriminate.\n\nPlease contact HR.\n"
         expected = (
-            "## Benefits\n\n## Equal Opportunity Employer\n"
+            "## Benefits\n\n## Equal Opportunity Employer\n\n"
             "We are an equal opportunity employer and do not discriminate.\n\nPlease contact HR.\n"
         )
         result = promoter.process(text)
@@ -1098,7 +1098,7 @@ class TestMixedLineEndings:
         text = "More text.\r\n\r\nBenefits\r\nWe are an equal opportunity employer."
         expected = (
             "More text.\r\n\r\n## Benefits\r\n\r\n"
-            "## Equal Opportunity Employer\r\nWe are an equal opportunity employer."
+            "## Equal Opportunity Employer\r\n\r\nWe are an equal opportunity employer."
         )
         result = promoter.process(text)
         assert result == expected
@@ -1113,7 +1113,7 @@ class TestMixedLineEndings:
         )
         result = promoter.process(text)
         assert result == (
-            "## Benefits\n\n## Equal Opportunity Employer\nWe are an equal opportunity employer.\n\n"
+            "## Benefits\n\n## Equal Opportunity Employer\n\nWe are an equal opportunity employer.\n\n"
             "Please contact HR.\n\nWe are an equal opportunity employer."
         )
         assert result.count("## Equal Opportunity Employer") == 1
@@ -1159,7 +1159,7 @@ class TestEEOIdempotenceUnderPromotion:
             "We are an equal opportunity employer."
         )
         expected = (
-            "## Benefits\n\n## Equal Opportunity Employer\nWe are an equal opportunity employer.\n\n"
+            "## Benefits\n\n## Equal Opportunity Employer\n\nWe are an equal opportunity employer.\n\n"
             "Please contact HR.\n\nWe are an equal opportunity employer."
         )
         result1 = promoter.process(text)
@@ -1176,7 +1176,7 @@ class TestEEOIdempotenceUnderPromotion:
             "We are an equal opportunity employer."
         )
         expected = (
-            "## Compensation\n\n## Equal Opportunity Employer\nWe are an equal opportunity employer.\n\n"
+            "## Compensation\n\n## Equal Opportunity Employer\n\nWe are an equal opportunity employer.\n\n"
             "Please contact HR.\n\nWe are an equal opportunity employer."
         )
         result1 = promoter.process(text)
@@ -1397,7 +1397,7 @@ class TestEEOGuard2DecoratedHeading:
         promoter = HeadingPromoter()
         text = f"More text.\n\n{heading_line}\nWe are an equal opportunity employer.\n\nPlease contact HR."
         expected = (
-            f"More text.\n\n{heading_line}\n\n## Equal Opportunity Employer\n"
+            f"More text.\n\n{heading_line}\n\n## Equal Opportunity Employer\n\n"
             "We are an equal opportunity employer.\n\nPlease contact HR."
         )
         result = promoter.process(text)
