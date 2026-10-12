@@ -779,6 +779,26 @@ class TestEEOBoilerplateWordBoundary:
         assert result == expected
         assert promoter.process(result) == result
 
+    def test_contact_hiring_manager_not_boilerplate(self) -> None:
+        """'Contact the hiring manager...' is not boilerplate, so the EEO paragraph is not isolated."""
+        promoter = HeadingPromoter()
+        text = "More text.\n\nAcme is an equal opportunity employer.\n\nContact the hiring manager for role details."
+        result = promoter.process(text)
+        assert result == text
+        assert promoter.process(result) == result
+
+    def test_please_contact_hr_still_boilerplate(self) -> None:
+        """'Please contact HR.' is boilerplate, so the EEO paragraph is isolated."""
+        promoter = HeadingPromoter()
+        text = "More text.\n\nAcme is an equal opportunity employer.\n\nPlease contact HR."
+        expected = (
+            "More text.\n\n## Equal Opportunity Employer\n\n"
+            "Acme is an equal opportunity employer.\n\nPlease contact HR."
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result
+
     @pytest.mark.parametrize(
         "boilerplate_line",
         [

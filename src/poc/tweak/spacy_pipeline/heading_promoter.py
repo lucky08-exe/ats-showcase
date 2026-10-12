@@ -143,10 +143,12 @@ PROTECTED_CLASS_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-# Single-word boilerplate keywords (ADA/contact/email notices). Matched on word
-# boundaries so that "ada" does not match "Canada" or "adapt" (Issue #374).
+# ADA/accommodation keywords and contact/email phrases, matched on word boundaries so that
+# "ada" does not match "Canada" or "adapt" (Issue #374). Bare "contact" and "email" are
+# deliberately absent: they also open ordinary sentences such as "Contact the hiring manager
+# for role details.", which must not be treated as boilerplate.
 BOILERPLATE_WORD_PATTERN = re.compile(
-    r"\b(?:accommodations?|ada|contact|disability|email)\b",
+    r"\b(?:accommodations?|ada|disability|contact\s+(?:us|hr)|email\s+(?:us|hr)|by\s+email)\b",
     re.IGNORECASE,
 )
 
