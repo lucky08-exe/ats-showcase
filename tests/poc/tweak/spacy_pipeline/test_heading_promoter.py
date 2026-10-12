@@ -892,23 +892,38 @@ class TestEEOSilentSkipGuards:
         assert result == expected
         assert result.count("## Equal Opportunity Employer") == 0
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "Pre-existing defect: Guard 4 compares the raw first line of the preceding paragraph. "
-            "After pass 1 promotes 'Benefits' to '## Benefits' that line no longer matches, so pass 2 "
-            "inserts a synthetic heading. Fixing this changes Guard 4 logic, which is out of scope here."
-        ),
-    )
     def test_guard4_second_pass_is_idempotent(self) -> None:
-        """Documents the Guard 4 idempotency defect (expected to fail until Guard 4 is fixed)."""
+        """Guard 4 still skips on pass 2, when 'Benefits' has been promoted to '## Benefits'."""
         promoter = HeadingPromoter()
         text = (
             "More text.\n\nBenefits\nDental coverage.\n\n"
             "Acme is an equal opportunity employer and does not discriminate."
         )
+        expected = (
+            "More text.\n\n## Benefits\nDental coverage.\n\n"
+            "Acme is an equal opportunity employer and does not discriminate."
+        )
         first = promoter.process(text)
+        assert first == expected
         assert promoter.process(first) == first
+        assert first.count("## Equal Opportunity Employer") == 0
+
+    def test_guard4_second_pass_idempotent_with_compensation_heading(self) -> None:
+        """Guard 4 idempotency holds for a different known heading ('Compensation')."""
+        promoter = HeadingPromoter()
+        text = (
+            "More text.\n\nCompensation\nBase salary range.\n\n"
+            "Acme is an equal opportunity employer and does not discriminate."
+        )
+        expected = (
+            "More text.\n\n## Compensation\nBase salary range.\n\n"
+            "Acme is an equal opportunity employer and does not discriminate."
+        )
+        first = promoter.process(text)
+        assert first == expected
+        second = promoter.process(first)
+        assert second == first
+        assert second.count("## Equal Opportunity Employer") == 0
 
     def test_guard2_alone_heading_line_in_eeo_paragraph_skips_insertion(self) -> None:
         """Guard 2 only: EEO paragraph's first line is a known heading, with no blank line before the sentence.

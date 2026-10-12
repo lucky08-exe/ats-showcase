@@ -130,6 +130,10 @@ EEO_TRIGGERS: FrozenSet[str] = frozenset(
 # Pattern for "without regard to" followed by protected class term within ~60 chars (Issue #374 Defect 3)
 # Protectedclass terms: race, color, religion, sex, gender, national origin, age, disability,
 # veteran, sexual orientation, marital status, genetic
+# Markdown heading prefix (Issue #374). Stripped before the known-heading check in Guard 4 so
+# that a line already promoted to "## Benefits" by an earlier pass still matches "benefits".
+HEADING_PREFIX_PATTERN = re.compile(r"^#{1,6}\s+")
+
 PROTECTED_CLASS_PATTERN = re.compile(
     r"without regard to\s+.{0,60}?\b(race|color|religion|sex|gender|national origin|age|disability|"
     r"veteran|sexual orientation|marital status|genetic)\b",
@@ -192,7 +196,7 @@ class HeadingPromoter(PipelineComponent):
 
         The output preserves existing lines; EEO isolation adds a heading and blank
         line; mixed line endings are normalized to the first one detected.
-        Known exception to idempotency: see Guard 4 in _isolate_eeo_paragraphs.
+        Idempotent: a second pass over its own output yields the same text.
 
         Args:
             text: Input text (may be empty, contain CRLF, or Unicode).
@@ -338,10 +342,12 @@ class HeadingPromoter(PipelineComponent):
         # right, and Phase 2 promotes its first line to "## ..." when it follows a blank
         # line. Intent: do not open a second synthetic section directly under it, so the
         # EEO sentence stays with the preceding known section. Return unchanged.
+        # A leading "## " prefix from an earlier pass is stripped first so the check is
+        # idempotent (Issue #374).
         if first_eeo_idx > 0:
             preceding_para = paragraphs[first_eeo_idx - 1]
             if preceding_para:
-                preceding_first_line = preceding_para[0].strip()
+                preceding_first_line = HEADING_PREFIX_PATTERN.sub("", preceding_para[0].strip())
                 preceding_normalized = self._normalize(preceding_first_line)
                 if preceding_normalized in self._headings:
                     return text
