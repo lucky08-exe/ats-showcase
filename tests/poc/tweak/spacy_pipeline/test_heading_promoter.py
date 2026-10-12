@@ -906,3 +906,54 @@ class TestProtectedClassPatternBound:
         result = promoter.process(text)
         assert result == text
         assert promoter.process(result) == result
+
+
+class TestEEOSilentSkipGuards:
+    """Guards 2 and 4 in _isolate_eeo_paragraphs each skip insertion on their own (Issue #374)."""
+
+    def test_guard4_alone_preceding_known_heading_skips_insertion(self) -> None:
+        """Guard 4 only: preceding paragraph starts with 'Benefits'; EEO first line is a sentence."""
+        promoter = HeadingPromoter()
+        text = (
+            "More text.\n\nBenefits\nDental coverage.\n\n"
+            "Acme is an equal opportunity employer and does not discriminate."
+        )
+        expected = (
+            "More text.\n\n## Benefits\nDental coverage.\n\n"
+            "Acme is an equal opportunity employer and does not discriminate."
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert result.count("## Equal Opportunity Employer") == 0
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "Pre-existing defect: Guard 4 compares the raw first line of the preceding paragraph. "
+            "After pass 1 promotes 'Benefits' to '## Benefits' that line no longer matches, so pass 2 "
+            "inserts a synthetic heading. Fixing this changes Guard 4 logic, which is out of scope here."
+        ),
+    )
+    def test_guard4_second_pass_is_idempotent(self) -> None:
+        """Documents the Guard 4 idempotency defect (expected to fail until Guard 4 is fixed)."""
+        promoter = HeadingPromoter()
+        text = (
+            "More text.\n\nBenefits\nDental coverage.\n\n"
+            "Acme is an equal opportunity employer and does not discriminate."
+        )
+        first = promoter.process(text)
+        assert promoter.process(first) == first
+
+    def test_guard2_alone_heading_line_in_eeo_paragraph_skips_insertion(self) -> None:
+        """Guard 2 only: EEO paragraph's first line is a known heading, with no blank line before the sentence.
+
+        Guard 2 is reachable here because the heading line shares a paragraph with the EEO
+        sentence. The preceding paragraph ('More text.') does not trigger Guard 3 or Guard 4.
+        """
+        promoter = HeadingPromoter()
+        text = "More text.\n\nEqual Opportunity Employer\nAcme is an equal opportunity employer."
+        expected = "More text.\n\n## Equal Opportunity Employer\nAcme is an equal opportunity employer."
+        result = promoter.process(text)
+        assert result == expected
+        assert result.count("## Equal Opportunity Employer") == 1
+        assert promoter.process(result) == result

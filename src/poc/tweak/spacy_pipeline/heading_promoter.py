@@ -304,7 +304,13 @@ class HeadingPromoter(PipelineComponent):
         if first_line_stripped.startswith("##"):
             return text
 
-        # Guard 2: First line should not be a known heading (would be promoted anyway)
+        # Guard 2 (silent skip): the EEO paragraph's first line is itself a known heading
+        # phrase, e.g. "Equal Opportunity Employer" written directly above the sentence.
+        # Phase 2 promotes that line to "## ..." on its own, so inserting a synthetic
+        # heading here would produce two headings for one block. Return unchanged.
+        # Reachable only when the heading line shares a paragraph with the EEO sentence
+        # (no blank line between them); a standalone heading line is a separate paragraph
+        # and is handled by Guard 4 / plain promotion instead.
         normalized = self._normalize(first_line_stripped)
         if normalized in self._headings:
             return text
@@ -315,9 +321,11 @@ class HeadingPromoter(PipelineComponent):
             if preceding_para and preceding_para[-1].strip().startswith("##"):
                 return text
 
-        # Guard 4: If preceding paragraph's first line is a known heading (like
-        # "Equal Opportunity Employer"), it would be promoted to ## in plain heading
-        # promotion. Skip insertion to avoid double-heading on the EEO paragraph.
+        # Guard 4 (silent skip): the paragraph immediately before the EEO paragraph starts
+        # with a known heading phrase (e.g. "Benefits"). That block is a section in its own
+        # right, and Phase 2 promotes its first line to "## ..." when it follows a blank
+        # line. Intent: do not open a second synthetic section directly under it, so the
+        # EEO sentence stays with the preceding known section. Return unchanged.
         if first_eeo_idx > 0:
             preceding_para = paragraphs[first_eeo_idx - 1]
             if preceding_para:
