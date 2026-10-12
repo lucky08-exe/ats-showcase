@@ -727,6 +727,20 @@ class TestHeadingPromoterDefectFixes:
         assert result.count("## Equal Opportunity Employer") == 0
         assert promoter.process(result) == result
 
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            ("Acme is an equal opportunity employer.", "Acme is an equal opportunity employer."),
+            ("Equal Opportunity Employer", "## Equal Opportunity Employer"),
+        ],
+    )
+    def test_single_paragraph_eeo_only_document(self, text: str, expected: str) -> None:
+        """A document with one paragraph returns early: no synthetic heading, only plain promotion."""
+        promoter = HeadingPromoter()
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result
+
     def test_eeo_followed_by_real_benefits_section_unchanged(self) -> None:
         """EEO followed by real '## Benefits' section: no synthetic heading."""
         promoter = HeadingPromoter()
@@ -739,12 +753,14 @@ class TestHeadingPromoterDefectFixes:
         assert "Acme is an equal opportunity employer." in result
 
     def test_idempotent_eeo_second_pass_equals_first(self) -> None:
-        """Idempotent: second pass equals first pass."""
+        """Idempotent: the first pass gives the exact expected output and a second pass leaves it unchanged."""
         promoter = HeadingPromoter()
         text = "More text.\n\nEqual Opportunity Employer\n\nAcme is an equal opportunity employer."
+        expected = "More text.\n\n## Equal Opportunity Employer\n\nAcme is an equal opportunity employer."
         result1 = promoter.process(text)
         result2 = promoter.process(result1)
-        assert result1 == result2
+        assert result1 == expected
+        assert result2 == result1
 
 
 class TestEEOBoilerplateWordBoundary:
@@ -766,14 +782,13 @@ class TestEEOBoilerplateWordBoundary:
         assert result == text
         assert promoter.process(result) == result
 
-    def test_please_contact_hr_for_ada_still_boilerplate(self) -> None:
-        """'Please contact HR for ADA accommodations.' is still boilerplate, so EEO is isolated."""
+    def test_ada_paragraph_without_contact_wording_is_boilerplate(self) -> None:
+        """'Requests for ADA support go to HR.' has no contact/email wording, yet is boilerplate, so EEO is isolated."""
         promoter = HeadingPromoter()
-        text = "More text.\n\nAcme is an equal opportunity employer.\n\nPlease contact HR for ADA accommodations."
+        text = "More text.\n\nAcme is an equal opportunity employer.\n\nRequests for ADA support go to HR."
         expected = (
             "More text.\n\n## Equal Opportunity Employer\n\n"
-            "Acme is an equal opportunity employer.\n\n"
-            "Please contact HR for ADA accommodations."
+            "Acme is an equal opportunity employer.\n\nRequests for ADA support go to HR."
         )
         result = promoter.process(text)
         assert result == expected
