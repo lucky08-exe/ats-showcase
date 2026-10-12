@@ -77,33 +77,54 @@ Compare the `spacy_load_cold_ms` value against the load target. Compare the medi
 
 ## Results
 
-All result cells are placeholders until the benchmark is run. No values have been recorded.
+Values are from **Run 1** (JSON mode, the documented default invocation, 5 repeats). Run 2 (`--table`, 5 repeats) is listed in the Run record below as a repeat check. Raw outputs are kept outside the repo.
+
+### Run record
+
+- **Command:** `uv run python scripts/benchmark_poc_extraction.py` (Run 1, JSON, default `--repeats 5`). Executed as `.venv/bin/python scripts/benchmark_poc_extraction.py` from the worktree using the main repo venv.
+- **Run 2 command:** `.venv/bin/python scripts/benchmark_poc_extraction.py --table` (default `--repeats 5`).
+- **Date:** 2026-10-12
+- **Branch / commit:** `fix/issue-450-docs-benchmark-run` based on `612626c` (includes the #448 single-load fix).
+- **Machine:** Intel(R) Core(TM) i7-3820 CPU @ 3.60GHz; `nproc` = 8; RAM 65,777,220 kB (about 62.7 GiB). Single machine.
+- **Software:** Python 3.12.12 (GCC 14.2.0 build); spaCy 3.8.14; `en_core_web_md` 3.8.0.
+- **Other load:** Load average at start was 0.69 / 0.78 / 0.88 (1 / 5 / 15 min). Desktop applications were running (IDE, window manager, browser), each using low CPU at the time of the check. No other benchmark or heavy job was identified. Load average after Run 2 was 2.02 / 1.08 / 0.97. The machine was not otherwise idle.
+- **Model load sample count:** `spacy.load` is one cold call per process, so min = median = max for it. `SkillExtractor` init repeats 5 times on the shared `nlp`.
+- **Run 2 repeat check (table mode):** `spacy.load` cold 1346.592 ms. Medium skill median 167.409 ms (Run 1: 174.633). Medium tech parse median 164.486 ms (Run 1: 166.061). Large skill median 717.674 ms (Run 1: 728.291). Large tech parse median 717.965 ms (Run 1: 733.840). Only two runs were done, so no variance claim is made beyond these differences (about 1-5% on the medians shown).
 
 ### Model load
 
 | Metric | min (ms) | median (ms) | max (ms) |
 |--------|----------|-------------|----------|
-| `spacy.load` cold (single call) | PENDING-RUN | PENDING-RUN | PENDING-RUN |
-| `SkillExtractor` init | PENDING-RUN | PENDING-RUN | PENDING-RUN |
+| `spacy.load` cold (single call) | 1335.411 | 1335.411 | 1335.411 |
+| `SkillExtractor` init | 0.135 | 0.141 | 0.362 |
 
 ### Extraction latency
 
 | Size | Tokens | Metric | min (ms) | median (ms) | max (ms) |
 |------|--------|--------|----------|-------------|----------|
-| small (target ~100) | PENDING-RUN | `SkillExtractor.extract` | PENDING-RUN | PENDING-RUN | PENDING-RUN |
-| small (target ~100) | PENDING-RUN | Tech `nlp(text)` parse | PENDING-RUN | PENDING-RUN | PENDING-RUN |
-| small (target ~100) | PENDING-RUN | Tech `extract(doc)` | PENDING-RUN | PENDING-RUN | PENDING-RUN |
-| medium (target ~1000) | PENDING-RUN | `SkillExtractor.extract` | PENDING-RUN | PENDING-RUN | PENDING-RUN |
-| medium (target ~1000) | PENDING-RUN | Tech `nlp(text)` parse | PENDING-RUN | PENDING-RUN | PENDING-RUN |
-| medium (target ~1000) | PENDING-RUN | Tech `extract(doc)` | PENDING-RUN | PENDING-RUN | PENDING-RUN |
-| large (target ~5000) | PENDING-RUN | `SkillExtractor.extract` | PENDING-RUN | PENDING-RUN | PENDING-RUN |
-| large (target ~5000) | PENDING-RUN | Tech `nlp(text)` parse | PENDING-RUN | PENDING-RUN | PENDING-RUN |
-| large (target ~5000) | PENDING-RUN | Tech `extract(doc)` | PENDING-RUN | PENDING-RUN | PENDING-RUN |
+| small (target ~100) | 379 | `SkillExtractor.extract` | 58.843 | 59.586 | 60.230 |
+| small (target ~100) | 379 | Tech `nlp(text)` parse | 58.510 | 59.601 | 68.797 |
+| small (target ~100) | 379 | Tech `extract(doc)` | 0.045 | 0.046 | 0.051 |
+| medium (target ~1000) | 1137 | `SkillExtractor.extract` | 170.080 | 174.633 | 177.626 |
+| medium (target ~1000) | 1137 | Tech `nlp(text)` parse | 165.251 | 166.061 | 167.008 |
+| medium (target ~1000) | 1137 | Tech `extract(doc)` | 0.127 | 0.127 | 0.132 |
+| large (target ~5000) | 4927 | `SkillExtractor.extract` | 727.897 | 728.291 | 741.298 |
+| large (target ~5000) | 4927 | Tech `nlp(text)` parse | 718.925 | 733.840 | 743.493 |
+| large (target ~5000) | 4927 | Tech `extract(doc)` | 0.539 | 0.540 | 0.589 |
 
 ### Peak memory (tracemalloc)
 
 | Size | Tokens | Skill peak (bytes) | Tech parse + extract peak (bytes) |
 |------|--------|--------------------|-----------------------------------|
-| small (target ~100) | PENDING-RUN | PENDING-RUN | PENDING-RUN |
-| medium (target ~1000) | PENDING-RUN | PENDING-RUN | PENDING-RUN |
-| large (target ~5000) | PENDING-RUN | PENDING-RUN | PENDING-RUN |
+| small (target ~100) | 379 | 6,921,374 | 6,921,938 |
+| medium (target ~1000) | 1137 | 20,435,398 | 20,435,571 |
+| large (target ~5000) | 4927 | 88,127,224 | 88,127,130 |
+
+These are tracemalloc values, which undercount native (Cython/C and vector) memory. Treat them as lower bounds.
+
+### Manual comparison against targets
+
+No pass/fail is computed by the script. The comparison below is manual and uses Run 1.
+
+- **Model load (< 2000 ms):** `spacy_load_cold_ms` = 1335.411 ms, below the target. This is a single cold sample. Run 2 gave 1346.592 ms.
+- **Extraction per ~1000-token doc (< 100 ms):** the medium input is 1137 tokens. Skill median is 174.633 ms, which is above 100 ms. Tech path median is 166.061 ms (parse) + 0.127 ms (extract) = 166.188 ms, also above 100 ms. Run 2 medians were 167.409 ms (skill) and 164.486 + 0.133 ms (tech). Both paths were above the target in both runs.
