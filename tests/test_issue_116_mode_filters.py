@@ -3,7 +3,6 @@
 import json
 import tempfile
 from pathlib import Path
-from typing import cast
 
 import pytest
 
@@ -147,7 +146,7 @@ class TestAssessModeModeFilter:
             tech_score=90.0,
             seniority_score=80.0,
             location_score=95.0,
-            recommendations=cast(list[str], "Good match"),
+            recommendations=["Good match"],
             summary="Engineer with 5+ years",
             tokens_used=500,
             actual_cost=0.0015,
@@ -175,7 +174,7 @@ class TestAssessModeModeFilter:
             tech_score=90.0,
             seniority_score=80.0,
             location_score=95.0,
-            recommendations=cast(list[str], "Good match"),
+            recommendations=["Good match"],
             summary="Engineer with 5+ years",
             tokens_used=500,
             actual_cost=0.0015,

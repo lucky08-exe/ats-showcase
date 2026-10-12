@@ -1453,6 +1453,35 @@ class TestEEOFirstSentenceCandidacy:
         assert promoter.process(result) == result
 
     @pytest.mark.parametrize(
+        "notice",
+        [
+            "Anyone who requires accommodation during the interview process should contact HR.",
+            "People who require accommodation in the application process will be supported.",
+            "Someone who requires accommodation during interviews will be supported.",
+            "All who require accommodation during the process will be supported.",
+        ],
+    )
+    def test_inclusive_lead_in_accommodation_notice_is_boilerplate(self, notice: str) -> None:
+        """'Anyone/people/someone/all who require ... accommodation' is a notice; EEO is isolated."""
+        promoter = HeadingPromoter()
+        text = f"More text.\n\nAcme is an equal opportunity employer. {notice}"
+        expected = f"More text.\n\n## Equal Opportunity Employer\n\nAcme is an equal opportunity employer. {notice}"
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result
+
+    def test_all_shift_patterns_accommodation_job_wording_is_not_boilerplate(self) -> None:
+        """Negative: 'all' without 'who/whom require' stays job content; unchanged."""
+        promoter = HeadingPromoter()
+        text = (
+            "More text.\n\nAcme is an equal opportunity employer. "
+            "This role requires accommodation for all shift patterns."
+        )
+        result = promoter.process(text)
+        assert result == text
+        assert promoter.process(result) == result
+
+    @pytest.mark.parametrize(
         "label_line",
         ["**Accommodations**", "_Accommodations_", "__Accommodations__"],
     )
