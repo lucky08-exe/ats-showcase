@@ -1402,6 +1402,38 @@ class TestEEOFirstSentenceCandidacy:
         assert result == expected
         assert promoter.process(result) == result
 
+    def test_applicants_who_require_accommodation_notice_is_boilerplate(self) -> None:
+        """'Applicants who require accommodation ...' is an accommodation notice (recall); EEO is isolated."""
+        promoter = HeadingPromoter()
+        text = (
+            "More text.\n\nAcme is an equal opportunity employer. "
+            "Applicants who require accommodation in the application process will be supported."
+        )
+        expected = (
+            "More text.\n\n## Equal Opportunity Employer\n\n"
+            "Acme is an equal opportunity employer. "
+            "Applicants who require accommodation in the application process will be supported."
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result
+
+    def test_that_requires_accommodation_job_wording_is_boilerplate_known_limitation(self) -> None:
+        """Known limitation (accepted): 'a role that requires accommodations' job wording isolates the EEO sentence.
+
+        The "who/whom/that require ... accommodation(s)" lead-in cannot tell a notice from a job description.
+        The test pins the current behaviour; it is not a statement that the line is boilerplate.
+        """
+        promoter = HeadingPromoter()
+        job_line = "A role that requires accommodations for travel."
+        text = f"More text.\n\nAcme is an equal opportunity employer.\n\n{job_line}"
+        expected = (
+            f"More text.\n\n## Equal Opportunity Employer\n\nAcme is an equal opportunity employer.\n\n{job_line}"
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result
+
     @pytest.mark.parametrize(
         "label_line",
         ["**Accommodations**", "_Accommodations_", "__Accommodations__"],
