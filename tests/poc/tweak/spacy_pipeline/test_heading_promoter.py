@@ -1453,17 +1453,38 @@ class TestEEOMultiSentenceParagraphs:
         assert result == expected
         assert promoter.process(result) == result
 
-    def test_on_basis_of_protected_class_sentence_isolated(self) -> None:
-        """'... on the basis of race, color ...' as a second sentence matches the widened protected-class lead-in."""
+    def test_on_basis_of_job_content_second_sentence_left_alone(self) -> None:
+        """'Pay is set on the basis of age ...' is job content, not EEO, so the paragraph is not isolated."""
         promoter = HeadingPromoter()
-        text = (
-            "More text.\n\nAcme is an equal opportunity employer. "
-            "Hiring decisions are made on the basis of race, color, religion, sex or national origin."
-        )
+        text = "More text.\n\nAcme is an equal opportunity employer. Pay is set on the basis of age and experience."
+        result = promoter.process(text)
+        assert result == text
+        assert "## Equal Opportunity Employer" not in result
+        assert promoter.process(result) == result
+
+    @pytest.mark.parametrize(
+        "job_line",
+        [
+            "Recommendations are made on the basis of color contrast data.",
+            "Decisions are made on the basis of race conditions.",
+        ],
+    )
+    def test_on_basis_of_job_content_first_sentence_not_eeo(self, job_line: str) -> None:
+        """A paragraph whose only protected-class-like wording is 'on the basis of' job content is not EEO."""
+        promoter = HeadingPromoter()
+        text = f"More text.\n\n{job_line}"
+        result = promoter.process(text)
+        assert result == text
+        assert "## Equal Opportunity Employer" not in result
+        assert promoter.process(result) == result
+
+    def test_we_do_not_discriminate_second_sentence_isolated(self) -> None:
+        """A bare 'We do not discriminate.' second sentence is a discrimination disclaimer, so it is isolated."""
+        promoter = HeadingPromoter()
+        text = "More text.\n\nAcme is an equal opportunity employer. We do not discriminate."
         expected = (
             "More text.\n\n## Equal Opportunity Employer\n\n"
-            "Acme is an equal opportunity employer. "
-            "Hiring decisions are made on the basis of race, color, religion, sex or national origin."
+            "Acme is an equal opportunity employer. We do not discriminate."
         )
         result = promoter.process(text)
         assert result == expected

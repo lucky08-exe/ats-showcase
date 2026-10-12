@@ -154,22 +154,25 @@ _SENTENCE_SPLIT_PATTERN = re.compile(r"(?<=[.!?])\s+")
 # (e.g. "You will build diversity dashboards.") is treated as EEO-ish and does not block isolation.
 EEO_CONTINUATION_PATTERN = re.compile(r"\b(diversity|diverse|inclusion|inclusive|belonging)\b", re.IGNORECASE)
 
-# "without regard to" or "on the basis of" followed by a protected-class term within ~60 chars
-# (Issue #374 Defect 3; "on the basis of" added in Issue #374 round 6).
+# "without regard to" followed by a protected-class term within ~60 chars (Issue #374 Defect 3).
+# A bare "on the basis of" lead-in is deliberately absent: job content such as "Pay is set on the
+# basis of age and experience." or "Decisions are made on the basis of race conditions." would
+# otherwise be read as an EEO statement.
 # Protected-class terms, singular and plural: race(s), color(s), religion(s)/religious, sex(es),
 # gender(s), national origin(s), age(s), disability/disabilities, veteran(s), sexual orientation(s),
 # marital status(es), genetic(s).
 PROTECTED_CLASS_PATTERN = re.compile(
-    r"(?:without regard to|on the basis of)\s+.{0,60}?\b(races?|colors?|religions?|religious|sex(?:es)?|genders?|"
+    r"without regard to\s+.{0,60}?\b(races?|colors?|religions?|religious|sex(?:es)?|genders?|"
     r"national origins?|ages?|disabilit(?:y|ies)|veterans?|sexual orientations?|marital status(?:es)?|"
     r"genetics?)\b",
     re.IGNORECASE,
 )
 
-# "do not discriminate" / "does not discriminate" (Issue #374 round 6). "does not discriminate" is an
-# EEO trigger; this pattern adds the plural "do not" form so that a second sentence such as
-# "We do not discriminate on the basis of race..." keeps the EEO paragraph a candidate.
-DISCRIMINATE_PATTERN = re.compile(r"\bdo(?:es)?\s+not\s+discriminate\b", re.IGNORECASE)
+# Discrimination-disclaimer wording for a sentence after an EEO first sentence (Issue #374 round 6).
+# "does not discriminate" is also an EEO trigger for the first sentence; this pattern additionally
+# covers "do not", "will not" and "never" (e.g. "We do not discriminate." or "We do not discriminate on
+# the basis of race, color, ...") so that such a later sentence is EEO-ish and does not block isolation.
+DISCRIMINATE_PATTERN = re.compile(r"\b(?:do(?:es)?\s+not|will\s+not|never)\s+discriminat\w*", re.IGNORECASE)
 
 # "encouraged to apply" (Issue #374 round 6), e.g. "Women, minorities, veterans and individuals with
 # disabilities are encouraged to apply." The phrase is generic, so it is accepted only as a sentence
@@ -232,11 +235,14 @@ class HeadingPromoter(PipelineComponent):
     from plain-text job descriptions before the MarkdownSpanRuler parser runs.
 
     Also isolates trailing EEO paragraphs by inserting a synthesized heading
-    before them (Issue #374). An EEO paragraph is detected if its text matches
-    an EEO trigger phrase in the first ~200 characters, or "without regard to"
-    followed by a protected-class term within ~60 characters, inside the first
-    ~400 characters. It is isolated only if every paragraph after it is empty,
-    boilerplate (ADA/contact/accommodation notices), or another EEO paragraph.
+    before them (Issue #374). An EEO paragraph is a candidate if its first sentence
+    contains an EEO trigger phrase (first ~200 characters), or "without regard to"
+    followed by a protected-class term within ~60 characters (first ~400 characters).
+    Every later sentence of the paragraph must also be EEO-ish: an EEO trigger, a
+    protected-class pattern, a discrimination disclaimer (DISCRIMINATE_PATTERN),
+    "encouraged to apply", DEI vocabulary, or empty/boilerplate wording. It is isolated
+    only if every paragraph after it is empty, boilerplate (ADA/contact/accommodation
+    notices), or another EEO paragraph.
 
     Attributes:
         headings: Frozenset of allowed heading phrases (lowercase, no trailing ':').
@@ -331,11 +337,14 @@ class HeadingPromoter(PipelineComponent):
     def _isolate_eeo_paragraphs(self, text: str) -> str:
         """Isolate trailing EEO paragraphs by inserting a synthesized heading.
 
-        Detects EEO paragraphs (blank-line separated blocks that match EEO trigger
-        phrases) and inserts ## Equal Opportunity Employer before them, but only if
-        all paragraphs after the EEO paragraph are empty or boilerplate (ADA/contact/
-        accommodation notices). Insert directly into original line list, preserving
-        blank lines and line endings.
+        Detects EEO paragraphs and inserts ## Equal Opportunity Employer before them,
+        but only if all paragraphs after the EEO paragraph are empty, boilerplate
+        (ADA/contact/accommodation notices) or further EEO paragraphs. A paragraph is
+        an EEO candidate when its first sentence has an EEO trigger or a "without regard
+        to" protected-class phrase (see _is_eeo_paragraph). Each later sentence of the
+        candidate is then checked on its own by _is_eeo_ish_sentence: a sentence that is
+        job content makes the whole paragraph a non-EEO paragraph. Insert directly into
+        original line list, preserving blank lines and line endings.
 
         Idempotent: repeated calls produce same result.
 
