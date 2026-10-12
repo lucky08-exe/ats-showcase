@@ -1132,6 +1132,57 @@ class TestProtectedClassPlurals:
         assert promoter.process(result) == result
 
 
+class TestEEOAccommodationBoilerplate:
+    """Bare 'accommodation' is job content; accommodation notices still count as boilerplate (Issue #374)."""
+
+    def test_relocation_accommodations_not_boilerplate(self) -> None:
+        """'Relocation accommodations are available for this role.' is not boilerplate; EEO is not isolated."""
+        promoter = HeadingPromoter()
+        text = (
+            "More text.\n\nAcme is an equal opportunity employer.\n\n"
+            "Relocation accommodations are available for this role."
+        )
+        result = promoter.process(text)
+        assert result == text
+        assert promoter.process(result) == result
+
+    def test_reasonable_accommodations_still_boilerplate(self) -> None:
+        """'Reasonable accommodations are available for this role.' is boilerplate; EEO is isolated."""
+        promoter = HeadingPromoter()
+        text = (
+            "More text.\n\nAcme is an equal opportunity employer.\n\n"
+            "Reasonable accommodations are available for this role."
+        )
+        expected = (
+            "More text.\n\n## Equal Opportunity Employer\n\n"
+            "Acme is an equal opportunity employer.\n\n"
+            "Reasonable accommodations are available for this role."
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result
+
+    @pytest.mark.parametrize(
+        "boilerplate_line",
+        [
+            "Accommodations are available on request.",
+            "Accommodations",
+            "Request accommodations here.",
+        ],
+    )
+    def test_accommodation_notice_with_request_or_label_is_boilerplate(self, boilerplate_line: str) -> None:
+        """Accommodation with a request phrase, or a bare 'Accommodations' label, is boilerplate."""
+        promoter = HeadingPromoter()
+        text = f"More text.\n\nAcme is an equal opportunity employer.\n\n{boilerplate_line}"
+        expected = (
+            "More text.\n\n## Equal Opportunity Employer\n\n"
+            f"Acme is an equal opportunity employer.\n\n{boilerplate_line}"
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result
+
+
 class TestEEOAdaCaseSensitivity:
     """The ADA token is uppercase-only, so the language 'Ada' is not boilerplate (Issue #374)."""
 

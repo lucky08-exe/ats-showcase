@@ -154,18 +154,30 @@ PROTECTED_CLASS_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-# ADA/accommodation keywords and contact/email phrases, matched on word boundaries so that
-# "ada" does not match "Canada" or "adapt" (Issue #374). The ADA token is case-sensitive so the
-# language "Ada" ("Experience with Ada.") is not treated as boilerplate; all other alternatives
-# are case-insensitive. Bare "contact" and "email" are deliberately absent: they also open
+# ADA keyword and contact/email phrases, matched on word boundaries so that "ada" does not match
+# "Canada" or "adapt" (Issue #374). The ADA token is case-sensitive so the language "Ada"
+# ("Experience with Ada.") is not treated as boilerplate; all other alternatives are
+# case-insensitive. Bare "contact" and "email" are deliberately absent: they also open
 # ordinary sentences such as "Contact the hiring manager for role details.", which must not be
-# treated as boilerplate.
+# treated as boilerplate. A bare "accommodation" is also absent: "Relocation accommodations are
+# available for this role." is job content. Accommodation notices are matched by
+# ACCOMMODATION_REQUEST_PATTERN and ACCOMMODATION_LABEL_PATTERN instead.
 # Known limitation: bare "disability" and "by email" are still matched case-insensitively, so
 # ordinary sentences containing them can be read as boilerplate.
 BOILERPLATE_WORD_PATTERN = re.compile(
-    r"\b(?:accommodations?|(?-i:ADA)|disability|contact\s+(?:us|hr)|email\s+(?:us|hr)|by\s+email)\b",
+    r"\b(?:(?-i:ADA)|disability|contact\s+(?:us|hr)|email\s+(?:us|hr)|by\s+email)\b",
     re.IGNORECASE,
 )
+
+# "accommodation(s)" with "request(s)/requested" within ~60 chars on the same sentence, in either
+# order (e.g. "Accommodations are available on request.", "Request accommodations here.").
+ACCOMMODATION_REQUEST_PATTERN = re.compile(
+    r"\baccommodations?\b[^.!?]{0,60}\brequest\w*|\brequest\w*[^.!?]{0,60}\baccommodations?\b",
+    re.IGNORECASE,
+)
+
+# A paragraph that is only a bare "Accommodations" section label (optional trailing colon).
+ACCOMMODATION_LABEL_PATTERN = re.compile(r"accommodations?:?", re.IGNORECASE)
 
 # Multi-word boilerplate phrases, matched as plain substrings.
 BOILERPLATE_PHRASES: Tuple[str, ...] = (
@@ -495,9 +507,10 @@ class HeadingPromoter(PipelineComponent):
     def _is_empty_or_boilerplate(self, para: List[str]) -> bool:
         """Check if paragraph is empty or boilerplate (ADA/contact/accommodation).
 
-        Boilerplate patterns: accommodation(s), disability, ADA (uppercase only), contact us/hr,
-        email us/hr, by email (whole words), plus the phrases "if you need", "please contact",
-        "reasonable accommodation" and "get in touch".
+        Boilerplate patterns: disability, ADA (uppercase only), contact us/hr, email us/hr,
+        by email (whole words); accommodation with a request phrase; a bare "Accommodations"
+        label; plus the phrases "if you need", "please contact", "reasonable accommodation"
+        and "get in touch". A bare "accommodation" in job content is not boilerplate.
 
         Args:
             para: Paragraph as list of lines
@@ -513,6 +526,9 @@ class HeadingPromoter(PipelineComponent):
             return True
 
         if BOILERPLATE_WORD_PATTERN.search(text):
+            return True
+
+        if ACCOMMODATION_REQUEST_PATTERN.search(text) or ACCOMMODATION_LABEL_PATTERN.fullmatch(text):
             return True
 
         text_lower = text.lower()
