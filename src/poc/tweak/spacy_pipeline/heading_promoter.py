@@ -119,8 +119,9 @@ EEO_HEADING_NORMALIZED = "equal opportunity employer"
 
 # EEO phrase triggers for Issue #374 (small, high-precision set)
 # Matched case-insensitively in first ~200 chars of paragraph.
-# Known limitation: "is an equal opportunity" and "does not discriminate" are generic and can
-# false-positive on non-EEO sentences, e.g. "This is an equal opportunity to grow your career."
+# Known limitation: "is an equal opportunity", "does not discriminate" and "affirmative action" are
+# generic and can false-positive on non-EEO sentences, e.g. "This is an equal opportunity to grow
+# your career." or "Our affirmative action plan is posted in the lobby."
 # followed by a boilerplate paragraph ("Please contact HR.") is isolated under an EEO heading.
 # Accepted for now; tightening the phrases would change detection behaviour, so it is not done here.
 EEO_TRIGGERS: FrozenSet[str] = frozenset(
@@ -341,11 +342,12 @@ class HeadingPromoter(PipelineComponent):
             return text
 
         # Guard 2 (silent skip): the EEO paragraph's first line is itself a known heading
-        # phrase, e.g. "Equal Opportunity Employer". Such a line matches the EEO trigger, so
-        # it is the EEO paragraph itself, whether or not a sentence follows it in the same
-        # paragraph. Phase 2 promotes that line to "## ..." on its own, so a synthetic heading
-        # would give two headings for one block. Return unchanged; the outcome is plain
-        # promotion of the existing line.
+        # phrase. Two shapes reach here: a standalone "Equal Opportunity Employer" line, which
+        # matches the EEO trigger on its own; or a known heading followed by an EEO sentence in
+        # the same paragraph (e.g. "Benefits" then "We are an equal opportunity employer."), where
+        # the paragraph matches on the sentence, not on the heading line. Phase 2 promotes the
+        # heading line to "## ...", so a synthetic heading would give two headings for one block.
+        # Return unchanged; the outcome is plain promotion of the existing line.
         normalized = self._normalize(first_line_stripped)
         if normalized in self._headings:
             return text
