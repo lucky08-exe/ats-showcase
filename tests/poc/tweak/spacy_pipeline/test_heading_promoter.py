@@ -839,3 +839,47 @@ class TestEEOBoilerplateWordBoundary:
         result = promoter.process(text)
         assert result == expected
         assert promoter.process(result) == result
+
+
+class TestMultipleTrailingEEO:
+    """A trailing block of several EEO paragraphs is isolated at its first member (Issue #374)."""
+
+    def test_two_trailing_eeo_paragraphs_isolated_at_first(self) -> None:
+        """Only one heading, placed before the first EEO paragraph of the trailing block."""
+        promoter = HeadingPromoter()
+        text = "More text.\n\nAcme is an equal opportunity employer.\n\nBeta is an equal opportunity employer too."
+        expected = (
+            "More text.\n\n## Equal Opportunity Employer\n\n"
+            "Acme is an equal opportunity employer.\n\n"
+            "Beta is an equal opportunity employer too."
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert result.count("## Equal Opportunity Employer") == 1
+        assert promoter.process(result) == result
+
+    def test_eeo_followed_by_regardless_of_paragraph_not_isolated(self) -> None:
+        """Documented limitation: 'regardless of race' is not an EEO trigger, so nothing is isolated.
+
+        The trailing paragraph is neither boilerplate nor matched by PROTECTED_CLASS_PATTERN
+        (which only recognises 'without regard to'). The conservative outcome is no
+        synthetic heading, so the text is returned unchanged.
+        """
+        promoter = HeadingPromoter()
+        text = "More text.\n\nAcme is an equal opportunity employer.\n\nWe hire regardless of race or sex."
+        result = promoter.process(text)
+        assert result == text
+        assert promoter.process(result) == result
+
+    def test_eeo_followed_by_protected_class_only_paragraph_isolated(self) -> None:
+        """Trailing paragraph matched only by the protected-class pattern is accepted as EEO."""
+        promoter = HeadingPromoter()
+        text = "More text.\n\nAcme is an equal opportunity employer.\n\nWe make decisions without regard to sex or age."
+        expected = (
+            "More text.\n\n## Equal Opportunity Employer\n\n"
+            "Acme is an equal opportunity employer.\n\n"
+            "We make decisions without regard to sex or age."
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result

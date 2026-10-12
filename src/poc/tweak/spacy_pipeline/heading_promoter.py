@@ -274,18 +274,20 @@ class HeadingPromoter(PipelineComponent):
             # Need at least 2 paragraphs
             return text
 
-        # Find first EEO paragraph such that everything after it is boilerplate
+        # Find first EEO paragraph such that everything after it is a trailing block
+        # of boilerplate or further EEO paragraphs. Because the first qualifying EEO
+        # paragraph is chosen, a run of EEO paragraphs is isolated at its first member.
         first_eeo_idx = -1
         for i in range(len(paragraphs)):
             if self._is_eeo_paragraph(paragraphs[i]):
-                # Check if all paragraphs after this one are empty or boilerplate
-                all_trailing_boilerplate = True
+                # Check if all paragraphs after this one are empty, boilerplate, or EEO
+                all_trailing_ok = True
                 for j in range(i + 1, len(paragraphs)):
-                    if not self._is_empty_or_boilerplate(paragraphs[j]):
-                        all_trailing_boilerplate = False
+                    if not (self._is_empty_or_boilerplate(paragraphs[j]) or self._is_eeo_paragraph(paragraphs[j])):
+                        all_trailing_ok = False
                         break
 
-                if all_trailing_boilerplate:
+                if all_trailing_ok:
                     first_eeo_idx = i
                     break
 
