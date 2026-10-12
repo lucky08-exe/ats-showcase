@@ -1036,3 +1036,41 @@ class TestMixedLineEndings:
         result = promoter.process(text)
         assert result == expected
         assert promoter.process(result) == result
+
+
+class TestEEOIdempotenceUnderPromotion:
+    """Candidate selection must not change when Phase 2 promotes a known heading (Issue #374)."""
+
+    def test_heading_promoted_on_pass_one_does_not_add_eeo_heading_on_pass_two(self) -> None:
+        """Repro: 'Benefits' + EEO sentence is left unchanged by pass 1 (Guard 2) and stays so on pass 2."""
+        promoter = HeadingPromoter()
+        text = (
+            "Benefits\nWe are an equal opportunity employer.\n\nPlease contact HR.\n\n"
+            "We are an equal opportunity employer."
+        )
+        expected = (
+            "## Benefits\nWe are an equal opportunity employer.\n\nPlease contact HR.\n\n"
+            "We are an equal opportunity employer."
+        )
+        result1 = promoter.process(text)
+        result2 = promoter.process(result1)
+        assert result1 == expected
+        assert result2 == expected
+        assert result1.count("## Equal Opportunity Employer") == 0
+
+    def test_different_heading_word_idempotent(self) -> None:
+        """Variant with 'Compensation' as the promoted heading behaves the same way."""
+        promoter = HeadingPromoter()
+        text = (
+            "Compensation\nWe are an equal opportunity employer.\n\nPlease contact HR.\n\n"
+            "We are an equal opportunity employer."
+        )
+        expected = (
+            "## Compensation\nWe are an equal opportunity employer.\n\nPlease contact HR.\n\n"
+            "We are an equal opportunity employer."
+        )
+        result1 = promoter.process(text)
+        result2 = promoter.process(result1)
+        assert result1 == expected
+        assert result2 == expected
+        assert result1.count("## Equal Opportunity Employer") == 0

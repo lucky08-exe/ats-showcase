@@ -326,9 +326,10 @@ class HeadingPromoter(PipelineComponent):
         if not eeo_para:
             return text
 
-        # Guard 1 (defensive): the first line should not already be a "##" heading. This is
-        # currently unreachable: _is_eeo_paragraph rejects paragraphs whose first line starts
-        # with '#', so an EEO paragraph can never start with "##". Kept in case that changes.
+        # Guard 1: the EEO paragraph's first line is already a "##" heading (e.g. promoted by an
+        # earlier pass). _is_eeo_paragraph ignores a leading heading marker when judging
+        # candidacy, so such a paragraph can be selected; it is left unchanged rather than
+        # headed twice.
         first_line_stripped = eeo_para[0].strip()
         if first_line_stripped.startswith("##"):
             return text
@@ -424,7 +425,9 @@ class HeadingPromoter(PipelineComponent):
         """Check if a paragraph is an EEO paragraph.
 
         Checks if the paragraph's text (first ~200 chars) matches an EEO trigger
-        phrase. Must not be a bullet or heading line.
+        phrase. Must not be a bullet, table or list line. A leading "#{1,6} " heading
+        marker and trailing ':' on the first line are ignored, so a paragraph gives the
+        same answer before and after Phase 2 promotes its first line (idempotence, Issue #374).
 
         Args:
             para: Paragraph as list of lines
@@ -435,14 +438,14 @@ class HeadingPromoter(PipelineComponent):
         if not para:
             return False
 
-        first_line = para[0].strip()
+        first_line = HEADING_PREFIX_PATTERN.sub("", para[0].strip()).rstrip(":").strip()
 
-        # Must not be a bullet or heading
+        # Must not be a bullet, table or list line
         if not first_line or first_line[0] in "#*-+|" or first_line[0].isdigit():
             return False
 
         # Combine paragraph text for matching
-        para_text = " ".join(line.strip() for line in para)
+        para_text = " ".join([first_line] + [line.strip() for line in para[1:]])
         check_text = para_text[:200].casefold()
 
         # Check simple triggers
