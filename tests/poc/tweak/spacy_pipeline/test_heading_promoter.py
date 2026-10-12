@@ -1352,3 +1352,23 @@ class TestEEOFirstSentenceCandidacy:
         result = promoter.process(text)
         assert result == expected
         assert promoter.process(result) == result
+
+    @pytest.mark.parametrize(
+        "boilerplate_line",
+        [
+            "Accommodation requests can be made through HR.",
+            "Accommodation requests may be submitted to HR.",
+            "If you require accommodation, let us know.",
+        ],
+    )
+    def test_accommodation_request_phrasings_are_boilerplate(self, boilerplate_line: str) -> None:
+        """Accommodation-request phrasings (can/may be made or submitted; require accommodation) are boilerplate."""
+        promoter = HeadingPromoter()
+        text = f"More text.\n\nAcme is an equal opportunity employer.\n\n{boilerplate_line}"
+        expected = (
+            "More text.\n\n## Equal Opportunity Employer\n\n"
+            f"Acme is an equal opportunity employer.\n\n{boilerplate_line}"
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result

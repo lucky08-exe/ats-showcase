@@ -181,9 +181,16 @@ BOILERPLATE_WORD_PATTERN = re.compile(
 # on the same sentence (e.g. "Accommodations are available on request."), or "request(ed)
 # [a] [reasonable] accommodation(s)" (e.g. "Request reasonable accommodations here."). Business
 # uses such as "Manage travel accommodation requests" are job content and do not match.
+# Also "accommodation request(s) can/may/should/will be made|submitted|sent|directed" (e.g.
+# "Accommodation requests can be made through HR.") and "require(s) [a] [reasonable] accommodation(s)"
+# (e.g. "If you require accommodation, let us know.").
+# Residual risk: the "require" alternative also matches job content such as "Candidates may require
+# accommodation of shift hours." and treats that sentence as boilerplate.
 ACCOMMODATION_REQUEST_PATTERN = re.compile(
     r"\baccommodations?\b[^.!?]{0,60}\b(?:on|upon|to)\s+request\w*|"
-    r"\brequest\w*\s+(?:a\s+)?(?:reasonable\s+)?accommodations?\b",
+    r"\brequest\w*\s+(?:a\s+)?(?:reasonable\s+)?accommodations?\b|"
+    r"\baccommodations?\s+requests?\s+(?:can|may|should|will)\s+be\s+(?:made|submitted|sent|directed)\b|"
+    r"\brequire\w*\s+(?:a\s+)?(?:reasonable\s+)?accommodations?\b",
     re.IGNORECASE,
 )
 
