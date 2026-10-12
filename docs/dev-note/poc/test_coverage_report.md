@@ -11,7 +11,7 @@ Issue #429. Covers the skills and technologies POC extractor tests.
 | **Total** | | **70** |
 
 - Requires spaCy model `en_core_web_md` (`uv run python -m spacy download en_core_web_md`).
-- Measured runtime: 70 passed in 98.21s (single local run, `uv run pytest ... -q`).
+- Runtime: PENDING RUN. No run recorded yet; to be filled by a recorded `uv run pytest tests/poc/ -v` run.
 - Fixture paths are relative (`tests/poc/fixtures/...`). Run from the repository root.
 
 Note: this document replaces the missing `tests/poc/TEST_SUMMARY.md` referenced in issue #268 comments. No such file exists under `tests/poc/`.
@@ -40,7 +40,7 @@ Note: this document replaces the missing `tests/poc/TEST_SUMMARY.md` referenced 
 | `TestTechExtractorSorting` | 2 | Results sorted; alphabetical order |
 | `TestTechExtractorWithPreprocessing` | 2 | Extraction after document processing; entity info preserved |
 | `TestTechExtractorPerformance` | 3 | Timing on knowledge/skills fixture; repeated extraction consistency; large text handling |
-| `TestTechExtractorPatternGeneration` | 3 | `_generate_patterns()` output for all terms, single-word terms, and multi-word terms |
+| `TestTechExtractorPatternGeneration` | 3 | Inspects `TECH_TERMS` directly (non-empty set/list/tuple; single-word terms include a Python/Java entry; multi-word terms include one containing "vision"). Does not call `_generate_patterns()`. |
 
 ## Fixtures
 
@@ -58,14 +58,13 @@ Both fixture files exist (verified by glob). Most fixture-dependent tests guard 
 
 Verified by reading the two test files and their imports.
 
-1. **No combined-pipeline test.** Neither file imports the other extractor or any code that builds a combined output. No test asserts the `{"skills": [...], "technologies": [...]}` shape.
-2. **No production integration.** Both files import only `src/poc/skills/*` and `src/poc/technologies/*`. Nothing from `src/cli.py`, `src/storage/`, or `src/poc/tweak/` is exercised here.
-3. **Negation is not tested.** `TestTechExtractorEdgeCases::test_negated_technology` (docstring: "Handles negation") asserts only that `COBOL` is absent, and its own comment says it is absent because it is not in `TECH_TERMS`. It does not test negation handling. `test_skills_extractor.py` has no negation test.
-4. **No adversarial input tests.** No test name or docstring in either file targets prompt-injection-style text, confusable Unicode, or malformed input beyond the special-character and punctuation cases (`test_special_characters_in_text` in the skills file; `test_sentence_with_punctuation` in both).
-5. **Constructor error paths untested.** No test covers the `OSError` branch in `SkillExtractor.__init__` (invalid model name), or the `"entity_ruler" in nlp.pipe_names` reuse branch in `TechExtractor.__init__`.
-6. **Misnamed sorting test.** `TestSkillExtractorSorting::test_sorted_case_insensitive` does not test case-insensitive ordering. Its input is all lowercase.
-7. **Silent fixture skips.** Fixture helpers return `""` on a missing file, and the tests then skip. A rename of a fixture file would convert those tests into skips, not failures.
-8. **Wall-clock assertions.** `TestSkillExtractorPerformance::test_extraction_completes_quickly` asserts `elapsed < 1.0`; `TestTechExtractorPerformance::test_extraction_completes_quickly` asserts `elapsed < 0.1` (100 ms). Both can be flaky on slow hosts.
+1. **No production integration.** Both files import only `src/poc/skills/*` and `src/poc/technologies/*`. Nothing from `src/cli.py`, `src/storage/`, or `src/poc/tweak/` is exercised here.
+2. **Negation is not tested.** `TestTechExtractorEdgeCases::test_negated_technology` (docstring: "Handles negation") asserts only that `COBOL` is absent, and its own comment says it is absent because it is not in `TECH_TERMS`. It does not test negation handling. `test_skills_extractor.py` has no negation test.
+3. **No adversarial input tests.** No test name or docstring in either file targets prompt-injection-style text, confusable Unicode, or malformed input beyond the special-character and punctuation cases (`test_special_characters_in_text` in the skills file; `test_sentence_with_punctuation` in both).
+4. **Constructor error paths untested.** No test covers the `OSError` branch in `SkillExtractor.__init__` (invalid model name), or the `"entity_ruler" in nlp.pipe_names` reuse branch in `TechExtractor.__init__`.
+5. **Misnamed sorting test.** `TestSkillExtractorSorting::test_sorted_case_insensitive` does not test case-insensitive ordering. Its input is all lowercase.
+6. **Silent fixture skips.** Fixture helpers return `""` on a missing file, and the tests then skip. A rename of a fixture file would convert those tests into skips, not failures.
+7. **Wall-clock assertions.** `TestSkillExtractorPerformance::test_extraction_completes_quickly` asserts `elapsed < 1.0`; `TestTechExtractorPerformance::test_extraction_completes_quickly` asserts `elapsed < 0.1` (100 ms). Both can be flaky on slow hosts.
 
 ## Verification
 
