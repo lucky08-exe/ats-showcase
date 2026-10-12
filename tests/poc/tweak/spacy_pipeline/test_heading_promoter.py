@@ -646,6 +646,29 @@ XYZ Corporation is an equal opportunity employer and is committed to creating a 
         assert promoter.process(result) == result
 
 
+class TestEEOTriggerKnownFalsePositives:
+    """Pin the accepted generic-trigger false positives documented at heading_promoter.py:122-135."""
+
+    @pytest.mark.parametrize(
+        "sentence",
+        [
+            "This is an equal opportunity to grow your career.",
+            "Our affirmative action plan is posted in the lobby.",
+        ],
+    )
+    def test_known_limitation_generic_trigger_false_positive(self, sentence: str) -> None:
+        """Known limitation (heading_promoter.py:122-135): generic EEO_TRIGGERS match non-EEO sentences.
+
+        'is an equal opportunity' / 'affirmative action' followed by a boilerplate paragraph
+        ('Please contact HR.') is isolated under an EEO heading. This pins the accepted, not
+        necessarily desirable, behaviour; changing EEO_TRIGGERS should update this test deliberately.
+        """
+        promoter = HeadingPromoter()
+        text = f"{sentence}\n\nPlease contact HR."
+        result = promoter.process(text)
+        assert result.count("## Equal Opportunity Employer") == 1
+
+
 class TestHeadingPromoterDefectFixes:
     """Exact-equality tests for DEFECT 1, 2, 3 fixes (Issue #374)."""
 
