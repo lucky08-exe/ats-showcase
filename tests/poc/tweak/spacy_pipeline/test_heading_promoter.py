@@ -1156,6 +1156,28 @@ class TestEEOAdaCaseSensitivity:
         assert promoter.process(result) == result
 
 
+class TestEEOHeadingPrefixGuards:
+    """Guards 1 and 3 treat any markdown heading level (# to ######) as a heading (Issue #374)."""
+
+    def test_guard1_single_hash_heading_first_line_left_alone(self) -> None:
+        """An EEO paragraph whose first line is '# Hiring Info' is not headed again; text is unchanged."""
+        promoter = HeadingPromoter()
+        text = "# Hiring Info\nWe are an equal opportunity employer.\n\nPlease contact HR."
+        result = promoter.process(text)
+        assert result == text
+        assert result.count("## Equal Opportunity Employer") == 0
+        assert promoter.process(result) == result
+
+    def test_guard3_single_hash_heading_before_eeo_blocks_insertion(self) -> None:
+        """A preceding paragraph ending in '# Sub Heading' blocks insertion; text is unchanged."""
+        promoter = HeadingPromoter()
+        text = "More text.\n# Sub Heading\n\nAcme is an equal opportunity employer.\n\nPlease contact HR."
+        result = promoter.process(text)
+        assert result == text
+        assert result.count("## Equal Opportunity Employer") == 0
+        assert promoter.process(result) == result
+
+
 class TestEEOFirstSentenceCandidacy:
     """An EEO paragraph is a candidate only when its trigger is in the first sentence (Issue #374)."""
 

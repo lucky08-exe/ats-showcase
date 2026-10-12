@@ -337,12 +337,12 @@ class HeadingPromoter(PipelineComponent):
         if not eeo_para:
             return text
 
-        # Guard 1: the EEO paragraph's first line is already a "##" heading (e.g. promoted by an
-        # earlier pass). _is_eeo_paragraph ignores a leading heading marker when judging
+        # Guard 1: the EEO paragraph's first line is already a markdown heading ("#" to "######",
+        # e.g. promoted by an earlier pass). _is_eeo_paragraph ignores a leading heading marker when judging
         # candidacy, so such a paragraph can be selected; it is left unchanged rather than
         # headed twice.
         first_line_stripped = eeo_para[0].strip()
-        if first_line_stripped.startswith("##"):
+        if HEADING_PREFIX_PATTERN.match(first_line_stripped):
             return text
 
         # Guard 2 (silent skip): the EEO paragraph's first line is itself a known heading
@@ -359,7 +359,7 @@ class HeadingPromoter(PipelineComponent):
         # Guard 3: Check if preceding paragraph ends with a heading
         if first_eeo_idx > 0:
             preceding_para = paragraphs[first_eeo_idx - 1]
-            if preceding_para and preceding_para[-1].strip().startswith("##"):
+            if preceding_para and HEADING_PREFIX_PATTERN.match(preceding_para[-1].strip()):
                 return text
 
         # Guard 4 (silent skip): the paragraph immediately before the EEO paragraph starts
