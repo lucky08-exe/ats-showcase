@@ -405,57 +405,51 @@ class TestHeadingPromoterEEOIsolation:
     """Tests for EEO paragraph isolation (Issue #374)."""
 
     @pytest.mark.parametrize(
-        "trigger_phrase",
+        ("trigger_phrase", "eeo_sentence"),
         [
-            "equal opportunity employer",
-            "equal employment opportunity",
-            "is an equal opportunity",
-            "are an equal opportunity",
-            "does not discriminate",
-            "affirmative action",
+            ("equal opportunity employer", "Acme is an equal opportunity employer."),
+            ("equal employment opportunity", "We value equal employment opportunity in every hire."),
+            ("is an equal opportunity", "Acme is an equal opportunity workplace."),
+            ("are an equal opportunity", "We are an equal opportunity workplace."),
+            ("does not discriminate", "Acme does not discriminate in hiring."),
+            ("affirmative action", "Acme is committed to affirmative action."),
         ],
     )
-    def test_trailing_eeo_paragraph_isolated(self, trigger_phrase: str) -> None:
-        """Trailing EEO paragraph gets ## Equal Opportunity Employer heading."""
+    def test_trailing_eeo_paragraph_isolated(self, trigger_phrase: str, eeo_sentence: str) -> None:
+        """Trailing EEO sentence containing each trigger gets a synthesized heading (exact output)."""
+        assert trigger_phrase in eeo_sentence.lower()
         promoter = HeadingPromoter()
-        text = f"""Role Overview
-
-We are a great company.
-
-Required Qualifications
-
-5+ years of experience required.
-
-{trigger_phrase.title()}
-
-This is an equal opportunity employer and makes decisions without regard to race or color."""
-
+        text = (
+            "Role Overview\n\nWe are a great company.\n\nRequired Qualifications\n\n"
+            f"5+ years of experience required.\n\n{eeo_sentence}"
+        )
+        expected = (
+            "## Role Overview\n\nWe are a great company.\n\n## Required Qualifications\n\n"
+            f"5+ years of experience required.\n\n## Equal Opportunity Employer\n\n{eeo_sentence}"
+        )
         result = promoter.process(text)
-
-        # EEO heading should be inserted
-        assert "## Equal Opportunity Employer" in result
-        # Existing sections should still be there
-        assert "## Role Overview" in result
-        assert "## Required Qualifications" in result
+        assert result == expected
+        assert promoter.process(result) == result
 
     def test_mid_document_eeo_not_split(self) -> None:
-        """EEO phrase in middle of document (followed by real section) is not split."""
+        """EEO sentence mid-document, followed by a real section, gets no synthetic heading."""
         promoter = HeadingPromoter()
-        text = """Role Overview
-
-We believe in equal opportunity employment practices.
-
-Key Responsibilities
-
-Lead the team and manage projects."""
-
+        text = (
+            "Role Overview\n\n"
+            "We believe in equal employment opportunity and decide without regard to race.\n\n"
+            "Key Responsibilities\n\n"
+            "Lead the team and manage projects."
+        )
+        expected = (
+            "## Role Overview\n\n"
+            "We believe in equal employment opportunity and decide without regard to race.\n\n"
+            "## Key Responsibilities\n\n"
+            "Lead the team and manage projects."
+        )
         result = promoter.process(text)
-
-        # No synthetic heading should be inserted
-        # (since EEO is not trailing)
+        assert result == expected
         assert result.count("## Equal Opportunity Employer") == 0
-        # Original content preserved
-        assert "equal opportunity employment practices" in result
+        assert promoter.process(result) == result
 
     def test_eeo_in_bullet_list_not_split(self) -> None:
         """EEO phrase inside a bullet point is not split."""
@@ -476,96 +470,84 @@ Technical Skills
         assert result.count("## Equal Opportunity Employer") == 0
 
     def test_eeo_already_under_heading_not_doubled(self) -> None:
-        """EEO paragraph already under a heading is not re-headed (idempotent)."""
+        """EEO paragraph already under a heading is not re-headed (Guard 3 keeps it unchanged)."""
         promoter = HeadingPromoter()
-        text = """Role Overview
-
-We are a great company.
-
-## Equal Opportunity Employer
-
-This is an equal opportunity employer."""
-
+        text = (
+            "Role Overview\n\nWe are a great company.\n\n"
+            "## Equal Opportunity Employer\n\n"
+            "This is an equal opportunity employer."
+        )
+        expected = (
+            "## Role Overview\n\nWe are a great company.\n\n"
+            "## Equal Opportunity Employer\n\n"
+            "This is an equal opportunity employer."
+        )
         result = promoter.process(text)
-
-        # Should not double-promote
+        assert result == expected
         assert result.count("## Equal Opportunity Employer") == 1
+        assert promoter.process(result) == result
 
     def test_eeo_idempotent_multiple_passes(self) -> None:
-        """Processing text with EEO multiple times yields same result."""
+        """Processing an EEO sentence several times yields the same result, with one heading."""
         promoter = HeadingPromoter()
-        text = """Role Overview
-
-We are a great company.
-
-Equal Opportunity Employer
-
-This is an equal opportunity employer and makes decisions without regard to race."""
-
+        text = (
+            "Role Overview\n\nWe are a great company.\n\n"
+            "Acme is an equal opportunity employer and makes decisions without regard to race."
+        )
+        expected = (
+            "## Role Overview\n\nWe are a great company.\n\n"
+            "## Equal Opportunity Employer\n\n"
+            "Acme is an equal opportunity employer and makes decisions without regard to race."
+        )
         result1 = promoter.process(text)
         result2 = promoter.process(result1)
         result3 = promoter.process(result2)
 
+        assert result1 == expected
         assert result1 == result2 == result3
-        # Should have exactly one EEO heading
         assert result1.count("## Equal Opportunity Employer") == 1
 
     def test_trailing_ada_paragraph_after_eeo_stays_trailing(self) -> None:
         """Trailing ADA/contact paragraph after EEO stays inside EEO section (DEFECT 1 FIX)."""
         promoter = HeadingPromoter()
-        text = """Role Overview
-
-We are a great company.
-
-Required Qualifications
-
-5+ years experience.
-
-Equal Opportunity Employer
-
-We are an equal opportunity employer without regard to color or background.
-
-Accommodations
-
-If you need accommodations, please contact us."""
-
+        text = (
+            "Role Overview\n\nWe are a great company.\n\n"
+            "Required Qualifications\n\n5+ years experience.\n\n"
+            "We are an equal opportunity employer without regard to color or background.\n\n"
+            "Accommodations\n\n"
+            "If you need accommodations, please contact us."
+        )
+        expected = (
+            "## Role Overview\n\nWe are a great company.\n\n"
+            "## Required Qualifications\n\n5+ years experience.\n\n"
+            "## Equal Opportunity Employer\n\n"
+            "We are an equal opportunity employer without regard to color or background.\n\n"
+            "Accommodations\n\n"
+            "If you need accommodations, please contact us."
+        )
         result = promoter.process(text)
-
-        # EEO heading should be inserted
-        assert "## Equal Opportunity Employer" in result
-        # ADA paragraph should stay after EEO (no separate heading)
-        assert "## Accommodations" not in result
-        # Verify order
-        eeo_idx = result.find("## Equal Opportunity Employer")
-        ada_idx = result.find("Accommodations")
-        assert eeo_idx < ada_idx
+        assert result == expected
+        assert promoter.process(result) == result
 
     def test_eeo_followed_by_real_section_not_split(self) -> None:
-        """EEO paragraph followed by a real section is not split."""
+        """EEO sentence followed by a real section is not isolated; the section is promoted."""
         promoter = HeadingPromoter()
-        text = """Role Overview
-
-We are a great company.
-
-Required Qualifications
-
-5+ years experience.
-
-Equal Opportunity Employer
-
-We are an equal opportunity employer.
-
-How to Apply
-
-Submit your resume online."""
-
+        text = (
+            "Role Overview\n\nWe are a great company.\n\n"
+            "Required Qualifications\n\n5+ years experience.\n\n"
+            "Acme is an equal opportunity employer.\n\n"
+            "How to Apply\n\nSubmit your resume online."
+        )
+        expected = (
+            "## Role Overview\n\nWe are a great company.\n\n"
+            "## Required Qualifications\n\n5+ years experience.\n\n"
+            "Acme is an equal opportunity employer.\n\n"
+            "## How to Apply\n\nSubmit your resume online."
+        )
         result = promoter.process(text)
-
-        # EEO should not be synthesized (real section follows)
-        # But plain text promotion still occurs, promoting "Equal Opportunity Employer" to ##
-        assert result.count("## Equal Opportunity Employer") == 1
-        # And "How to Apply" should be promoted
-        assert "## How to Apply" in result
+        assert result == expected
+        assert result.count("## Equal Opportunity Employer") == 0
+        assert promoter.process(result) == result
 
     def test_empty_text_unchanged(self) -> None:
         """Empty text is returned unchanged."""
@@ -574,21 +556,17 @@ Submit your resume online."""
         assert result == ""
 
     def test_case_insensitive_trigger_matching(self) -> None:
-        """EEO triggers match case-insensitively."""
+        """EEO triggers match case-insensitively; the synthesized heading keeps its own casing."""
         promoter = HeadingPromoter()
-        text = """Role Overview
-
-Details.
-
-EQUAL OPPORTUNITY EMPLOYER
-
-This is an EQUAL OPPORTUNITY EMPLOYER."""
-
+        text = "Role Overview\n\nDetails.\n\nACME IS AN EQUAL OPPORTUNITY EMPLOYER AND DOES NOT DISCRIMINATE."
+        expected = (
+            "## Role Overview\n\nDetails.\n\n"
+            "## Equal Opportunity Employer\n\n"
+            "ACME IS AN EQUAL OPPORTUNITY EMPLOYER AND DOES NOT DISCRIMINATE."
+        )
         result = promoter.process(text)
-
-        # Should detect EEO and add heading (case-insensitive)
-        # Note: preserves original case, so may be ## EQUAL OPPORTUNITY EMPLOYER
-        assert any(line.startswith("##") and "equal opportunity" in line.lower() for line in result.split("\n"))
+        assert result == expected
+        assert promoter.process(result) == result
 
     def test_eeo_in_first_200_chars(self) -> None:
         """EEO trigger must be in first ~200 chars of paragraph."""
@@ -638,8 +616,6 @@ Technical Skills
 * Go
 * Kubernetes
 
-Equal Opportunity Employer
-
 XYZ Corporation is an equal opportunity employer and is committed to creating a diverse and inclusive workplace."""
 
         result = promoter.process(text)
@@ -668,25 +644,14 @@ XYZ Corporation is an equal opportunity employer and is committed to creating a 
         tech_section_lines = [line for line in lines[:eeo_heading_line] if "Kubernetes" in line or "Python" in line]
         assert len(tech_section_lines) > 0, "Technical skills content not found before EEO"
 
-    def test_without_promoter_no_eeo_split(self) -> None:
-        """Text without promoter has EEO mixed in with preceding section."""
-        # This test verifies that without the promoter, EEO is not isolated
-        # Just document the behavior
-        text = """Role Overview
-
-Medtech company seeking a senior engineer.
-
-Required Qualifications
-
-5+ years of experience.
-
-Equal Opportunity Employer
-
-XYZ Corporation is an equal opportunity employer."""
-
-        # Without explicit heading, the last paragraph is not a separate section
-        # (This is more of a documentation test showing the problem the fix solves)
-        assert "## Equal Opportunity Employer" not in text
+    def test_eeo_followed_by_non_boilerplate_paragraph_unchanged(self) -> None:
+        """EEO sentence followed by a non-boilerplate paragraph is not isolated; text is unchanged."""
+        promoter = HeadingPromoter()
+        text = "More text.\n\nAcme is an equal opportunity employer.\n\nSubmit your resume to our team."
+        result = promoter.process(text)
+        assert result == text
+        assert result.count("## Equal Opportunity Employer") == 0
+        assert promoter.process(result) == result
 
 
 class TestHeadingPromoterDefectFixes:
@@ -755,10 +720,11 @@ class TestHeadingPromoterDefectFixes:
     def test_benefits_without_regard_to_tenure_unchanged(self) -> None:
         """Benefits with 'without regard to tenure': NOT detected as EEO (DEFECT 3 FIX)."""
         promoter = HeadingPromoter()
-        text = "Our benefits are offered without regard to tenure and include dental coverage."
+        text = "More text.\n\nOur benefits are offered without regard to tenure and include dental coverage."
         result = promoter.process(text)
         assert result.count("## Equal Opportunity Employer") == 0
         assert result == text
+        assert promoter.process(result) == result
 
     def test_mid_document_bullet_with_eeo_unchanged(self) -> None:
         """EEO phrase in bullet list: not isolated (no real section after)."""
