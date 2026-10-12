@@ -1096,3 +1096,37 @@ class TestEEOGuard5DecoratedHeading:
         assert result.count(heading_line) == 1
         assert "## Equal Opportunity Employer" not in result
         assert promoter.process(result) == result
+
+
+class TestProtectedClassPlurals:
+    """Protected-class terms match their plural and variant forms (Issue #374)."""
+
+    @pytest.mark.parametrize(
+        "term",
+        [
+            "races",
+            "colors",
+            "genders",
+            "ages",
+            "sexes",
+            "national origins",
+            "sexual orientations",
+            "marital statuses",
+            "religions",
+            "religious beliefs",
+            "veterans",
+            "disabilities",
+            "genetics",
+        ],
+    )
+    def test_plural_protected_class_term_isolates_eeo(self, term: str) -> None:
+        """A trailing 'without regard to <plural term>' paragraph is EEO; the preceding EEO sentence is headed."""
+        promoter = HeadingPromoter()
+        text = f"More text.\n\nAcme is an equal opportunity employer.\n\nWe hire without regard to {term}."
+        expected = (
+            f"More text.\n\n## Equal Opportunity Employer\n\n"
+            f"Acme is an equal opportunity employer.\n\nWe hire without regard to {term}."
+        )
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result

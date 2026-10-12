@@ -139,11 +139,13 @@ EEO_TRIGGERS: FrozenSet[str] = frozenset(
 HEADING_PREFIX_PATTERN = re.compile(r"^#{1,6}\s+")
 
 # "without regard to" followed by a protected-class term within ~60 chars (Issue #374 Defect 3).
-# Protected-class terms: race, color, religion(s)/religious, sex, gender, national origin, age,
-# disability/disabilities, veteran(s), sexual orientation, marital status, genetic(s).
+# Protected-class terms, singular and plural: race(s), color(s), religion(s)/religious, sex(es),
+# gender(s), national origin(s), age(s), disability/disabilities, veteran(s), sexual orientation(s),
+# marital status(es), genetic(s).
 PROTECTED_CLASS_PATTERN = re.compile(
-    r"without regard to\s+.{0,60}?\b(race|color|religions?|religious|sex|gender|national origin|age|"
-    r"disabilit(?:y|ies)|veterans?|sexual orientation|marital status|genetics?)\b",
+    r"without regard to\s+.{0,60}?\b(races?|colors?|religions?|religious|sex(?:es)?|genders?|"
+    r"national origins?|ages?|disabilit(?:y|ies)|veterans?|sexual orientations?|marital status(?:es)?|"
+    r"genetics?)\b",
     re.IGNORECASE,
 )
 
