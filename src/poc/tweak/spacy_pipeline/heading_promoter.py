@@ -138,8 +138,8 @@ EEO_TRIGGERS: FrozenSet[str] = frozenset(
 HEADING_PREFIX_PATTERN = re.compile(r"^#{1,6}\s+")
 
 PROTECTED_CLASS_PATTERN = re.compile(
-    r"without regard to\s+.{0,60}?\b(race|color|religion|sex|gender|national origin|age|disability|"
-    r"veteran|sexual orientation|marital status|genetic)\b",
+    r"without regard to\s+.{0,60}?\b(race|color|religions?|religious|sex|gender|national origin|age|"
+    r"disabilit(?:y|ies)|veterans?|sexual orientation|marital status|genetics?)\b",
     re.IGNORECASE,
 )
 

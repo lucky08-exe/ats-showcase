@@ -877,6 +877,15 @@ class TestProtectedClassPatternBound:
         assert result == expected
         assert promoter.process(result) == result
 
+    def test_plural_protected_class_term_is_eeo(self) -> None:
+        """Plural 'veterans' / 'disabilities' after 'without regard to' is EEO and isolated."""
+        promoter = HeadingPromoter()
+        text = "More text.\n\nWe hire without regard to veterans or disabilities."
+        expected = "More text.\n\n## Equal Opportunity Employer\n\nWe hire without regard to veterans or disabilities."
+        result = promoter.process(text)
+        assert result == expected
+        assert promoter.process(result) == result
+
     def test_protected_class_term_beyond_60_chars_not_eeo(self) -> None:
         """A protected-class term 66 chars after 'without regard to' is not EEO; text unchanged."""
         promoter = HeadingPromoter()
