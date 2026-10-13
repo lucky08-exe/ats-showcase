@@ -26,22 +26,40 @@ class SkillExtractor:
                 raise
         self.matcher = Matcher(self.nlp.vocab)
 
-        # 2. Define the Matcher Pattern
+        # 2. Define the Matcher Patterns
         # Logic: [Action Verb] + [Optional Preposition/Article] + [Descriptive Nouns/Adjectives]
-        pattern = [
-            # The Action: Must be a verb and its base form must be in our list
-            {"POS": "VERB", "LEMMA": {"IN": SKILL_VERBS}},
-            # Optional: Connector words like "with", "the", "of"
-            # (e.g., "partner WITH", "lead THE")
-            {"POS": {"IN": ["ADP", "DET", "PART"]}, "OP": "?"},
+        def noun_group() -> dict:
             # The Meat: A sequence of Nouns, Adjectives, or Proper Nouns
             # (e.g., "novel deep learning architectures")
             # Note: ADP excluded from this group (prepositions shouldn't appear as descriptors)
-            {"POS": {"IN": ["ADJ", "NOUN", "PROPN"]}, "OP": "+"},
+            return {"POS": {"IN": ["ADJ", "NOUN", "PROPN"]}, "OP": "+"}
+
+        def action_verb() -> dict:
+            # The Action: Must be a verb and its base form must be in our list
+            return {"POS": "VERB", "LEMMA": {"IN": SKILL_VERBS}}
+
+        def connector() -> dict:
+            # Optional: Connector words like "with", "the", "of"
+            # (e.g., "partner WITH", "lead THE")
+            return {"POS": {"IN": ["ADP", "DET", "PART"]}, "OP": "?"}
+
+        pattern = [action_verb(), connector(), noun_group()]
+
+        # Coordinated objects: [Verb] [Connector] [Nouns] "and" [Nouns]
+        # (e.g., "lead data science AND platform teams"). Without this, the span
+        # stops at "and" and the second conjunct is lost. Only "and" followed by
+        # a noun run extends the span; "and" + VERB (e.g., "design and develop")
+        # does not match and keeps the single-verb behaviour.
+        coordinated_pattern = [
+            action_verb(),
+            connector(),
+            noun_group(),
+            {"POS": "CCONJ", "LOWER": "and"},
+            noun_group(),
         ]
 
-        # Add pattern to matcher
-        self.matcher.add("SKILL_PHRASE", [pattern])
+        # Add patterns to matcher
+        self.matcher.add("SKILL_PHRASE", [pattern, coordinated_pattern])
 
     def extract(self, text):
         try:
