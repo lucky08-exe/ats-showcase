@@ -161,7 +161,7 @@ SAMPLE_JOBS = [
 ]
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def preprocessor() -> Generator[Preprocessor, None, None]:
     """Create a preprocessor with requirements extraction enabled.
 
