@@ -22,7 +22,17 @@ from src.preprocessing.span_categorizer import (
 )
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
+def nlp() -> Language:
+    """Load plain en_core_web_md model (no pipeline changes), shared across tests.
+
+    Returns:
+        spaCy Language model
+    """
+    return spacy.load("en_core_web_md")
+
+
+@pytest.fixture(scope="session")
 def spacy_model() -> Generator[Language, None, None]:
     """Load spaCy model with requirement_filter and span_categorizer components.
 
@@ -50,9 +60,8 @@ def spacy_model() -> Generator[Language, None, None]:
 class TestExtractSpanBoundaries:
     """Unit tests for _extract_span_boundaries() function."""
 
-    def test_valid_boundary_detection(self) -> None:
+    def test_valid_boundary_detection(self, nlp: Language) -> None:
         """Valid character offsets map to correct token indices."""
-        nlp = spacy.load("en_core_web_md")
         text = "Required: 5+ years Python experience"
         doc = nlp(text)
 
@@ -66,9 +75,8 @@ class TestExtractSpanBoundaries:
         assert end_idx is not None
         assert start_idx <= end_idx
 
-    def test_invalid_char_start_negative(self) -> None:
+    def test_invalid_char_start_negative(self, nlp: Language) -> None:
         """Negative char_start returns (None, None)."""
-        nlp = spacy.load("en_core_web_md")
         text = "Required: 5+ years Python"
         doc = nlp(text)
 
@@ -77,9 +85,8 @@ class TestExtractSpanBoundaries:
         assert start_idx is None
         assert end_idx is None
 
-    def test_invalid_char_end_negative(self) -> None:
+    def test_invalid_char_end_negative(self, nlp: Language) -> None:
         """Negative char_end returns (None, None)."""
-        nlp = spacy.load("en_core_web_md")
         text = "Required: 5+ years Python"
         doc = nlp(text)
 
@@ -88,9 +95,8 @@ class TestExtractSpanBoundaries:
         assert start_idx is None
         assert end_idx is None
 
-    def test_invalid_char_start_gte_char_end(self) -> None:
+    def test_invalid_char_start_gte_char_end(self, nlp: Language) -> None:
         """char_start >= char_end returns (None, None)."""
-        nlp = spacy.load("en_core_web_md")
         text = "Required: 5+ years Python"
         doc = nlp(text)
 
@@ -99,9 +105,8 @@ class TestExtractSpanBoundaries:
         assert start_idx is None
         assert end_idx is None
 
-    def test_invalid_char_start_beyond_doc(self) -> None:
+    def test_invalid_char_start_beyond_doc(self, nlp: Language) -> None:
         """char_start beyond doc.text length returns (None, None)."""
-        nlp = spacy.load("en_core_web_md")
         text = "Required: 5+ years"
         doc = nlp(text)
 
@@ -110,9 +115,8 @@ class TestExtractSpanBoundaries:
         assert start_idx is None
         assert end_idx is None
 
-    def test_valid_single_token(self) -> None:
+    def test_valid_single_token(self, nlp: Language) -> None:
         """Offset spanning single token returns correct indices."""
-        nlp = spacy.load("en_core_web_md")
         text = "Python experience required"
         doc = nlp(text)
 
@@ -126,9 +130,8 @@ class TestExtractSpanBoundaries:
         assert end_idx is not None
         assert start_idx == end_idx  # Single token
 
-    def test_valid_multi_token(self) -> None:
+    def test_valid_multi_token(self, nlp: Language) -> None:
         """Offset spanning multiple tokens returns valid range."""
-        nlp = spacy.load("en_core_web_md")
         text = "5+ years Python experience"
         doc = nlp(text)
 
@@ -199,9 +202,8 @@ class TestBoundaryHelpers:
 class TestExpandSpan:
     """Unit tests for _expand_span() function."""
 
-    def test_expand_stop_at_period(self) -> None:
+    def test_expand_stop_at_period(self, nlp: Language) -> None:
         """Expansion stops at period."""
-        nlp = spacy.load("en_core_web_md")
         text = "Required: 5+ years Python experience. Knowledge of Docker."
         doc = nlp(text)
 
@@ -215,9 +217,8 @@ class TestExpandSpan:
         expanded_span = doc[expanded_start : expanded_end + 1]
         assert "." not in expanded_span.text
 
-    def test_expand_includes_compound_and(self) -> None:
+    def test_expand_includes_compound_and(self, nlp: Language) -> None:
         """Expansion continues through 'and' conjunctions."""
-        nlp = spacy.load("en_core_web_md")
         text = "Required: Python and Java"
         doc = nlp(text)
 
@@ -230,9 +231,8 @@ class TestExpandSpan:
         # Should include "and Java"
         assert "and" in expanded_span.text or "Java" in expanded_span.text
 
-    def test_expand_includes_hyphenated_compound(self) -> None:
+    def test_expand_includes_hyphenated_compound(self, nlp: Language) -> None:
         """Expansion includes hyphenated words (compound dependency)."""
-        nlp = spacy.load("en_core_web_md")
         text = "cross-functional team management"
         doc = nlp(text)
 
@@ -245,9 +245,8 @@ class TestExpandSpan:
         # Should preserve hyphenated compound or include both parts
         assert expanded_span.text
 
-    def test_expand_bounds_respect_start_end(self) -> None:
+    def test_expand_bounds_respect_start_end(self, nlp: Language) -> None:
         """Expanded span never has end < start."""
-        nlp = spacy.load("en_core_web_md")
         text = "Required: Python experience"
         doc = nlp(text)
 
