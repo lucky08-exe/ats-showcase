@@ -560,6 +560,15 @@ class TestSkillExtractorVerbTaggedNoun:
 
     A verb-tagged-NOUN conjunct is never merged into the previous span: it is its
     own skill, the same as a verb conjunct ("design systems and develop platforms").
+
+    The skill verb must also govern the coordination somewhere up the parse, so a
+    noun coordination under another verb ("Our team includes the design and build
+    managers") is not matched.
+
+    Known limitation (not fixed): the guard needs spaCy dep ``conj``. When the parse
+    tags the verb as ``compound`` instead, it is not split out, e.g. "You will lead
+    data and ship terraform modules." stays one span, and "design systems or build
+    platforms" merges. These are parser variants, not covered by the guard.
     """
 
     def test_s2_verb_after_and_extracts_object(self, extractor):
@@ -607,6 +616,22 @@ class TestSkillExtractorVerbTaggedNoun:
     def test_ambiguous_verbs_as_nouns_not_matched(self, extractor):
         """Ambiguous verbs (ship/build/manage/design/test) used as nouns are not skills."""
         assert extractor.extract("Our crew and ship maintenance team is hiring.") == []
+
+    def test_noun_use_design_and_build_managers_not_matched(self, extractor):
+        """'design and build managers' is a noun coordination under 'includes' (not a skill verb).
+
+        spaCy tags 'build' as conj NOUN with an object after it, but no skill verb
+        governs the coordination, so no span is produced (#511 follow-up).
+        """
+        assert extractor.extract("Our team includes the design and build managers.") == []
+        assert extractor.extract("Our team includes design and build managers.") == []
+
+    def test_det_object_and_verb_tagged_noun_splits(self, extractor):
+        """A determiner in the object ('lead the data') does not block a verb-tagged-NOUN split."""
+        assert extractor.extract("You will lead the data and build platforms.") == [
+            "build platforms",
+            "lead the data",
+        ]
 
     def test_509_regressions_unchanged(self, extractor):
         """#509 spans are unchanged: serial lists, 'or' chains, hyphen conjuncts."""

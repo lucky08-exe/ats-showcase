@@ -68,7 +68,9 @@ def _has_spaced_dash(span: Span) -> bool:
 #   - tag NOUN and dep conj, and the lemma is in SKILL_VERBS;
 #   - an object noun group follows (optionally after one connector).
 # "the ship and crew" fails the dep test (ship is not conj) and "and crew" has no
-# verb lemma, so noun coordination is not matched.
+# verb lemma, so noun coordination is not matched. A skill verb must also govern the
+# coordination up the parse: "Our team includes the design and build managers" has
+# the same tags but is ruled by "includes", so it is not matched.
 #
 # A verb-tagged-NOUN conjunct that passes the guard is never merged into the
 # preceding span: _conjunct_end() refuses it, so it becomes its own match, the same
@@ -76,8 +78,15 @@ def _has_spaced_dash(span: Span) -> bool:
 
 
 def _is_verb_tagged_noun(tok: Token) -> bool:
-    """True for a skill verb that spaCy tagged NOUN as a conjunct (#511)."""
-    return tok.pos_ == "NOUN" and tok.dep_ == "conj" and tok.lemma_ in _SKILL_VERB_SET
+    """True for a skill verb that spaCy tagged NOUN as a conjunct under a skill verb (#511).
+
+    The coordination must be governed by a skill verb somewhere up the parse. Noun
+    coordinations under another verb ("Our team includes the design and build
+    managers") have the same tags but no skill verb above them, so they do not match.
+    """
+    if tok.pos_ != "NOUN" or tok.dep_ != "conj" or tok.lemma_ not in _SKILL_VERB_SET:
+        return False
+    return any(anc.pos_ == "VERB" and anc.lemma_ in _SKILL_VERB_SET for anc in tok.ancestors)
 
 
 def _verb_start_end(doc: Doc, start: int) -> int | None:
