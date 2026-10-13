@@ -142,6 +142,19 @@ class TestSkillExtractorPatternMatching:
         assert len(skills) > 0
         # Should capture "deep learning" as part of phrase
 
+    def test_coordinated_nouns_full_span(self, extractor):
+        """Coordinated object nouns stay in one span (snippet s6, #498)."""
+        text = "Lead data science and platform teams building services in Python and Docker."
+        skills = extractor.extract(text)
+        # Span must not stop at "and"; "building services" is a separate verb phrase.
+        assert skills == ["building services", "lead data science and platform teams"]
+
+    def test_and_before_verb_not_merged(self, extractor):
+        """'and' followed by a verb does not extend the noun span."""
+        text = "You will design systems and develop platforms."
+        skills = extractor.extract(text)
+        assert skills == ["design systems", "develop platforms"]
+
     def test_longest_span_filtering(self, extractor):
         """Filters overlapping spans, keeps longest."""
         text = "Design and develop novel deep learning architectures."
