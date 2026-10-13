@@ -613,3 +613,91 @@ class TestSkillProcessorNounLedJunkFiltering:
         # Should extract "go language"
         skill_texts = {s["skill"] for s in doc._.skills}
         assert "go language" in skill_texts
+
+
+class TestSkillProcessorHeadingExclusion:
+    """Heading-line noise must never be emitted as skills (Issue #375)."""
+
+    def test_heading_title_not_emitted_as_skill(self, nlp) -> None:
+        """Section title containing a SKILL_VERBS lemma is not emitted as a skill (Issue #375).
+
+        Title "Design Skills" contains the lemma "design"; only the bullet
+        content ("Python", "Go") may produce skill entries.
+        """
+        processor = SkillProcessor(nlp, "skill_processor", min_confidence=0.70)
+
+        section = _make_section(title="Design Skills", content="* Python\n* Go")
+        tc = TypeClassification(SectionType.SKILLS, 0.85, ("skill",))
+        classification = SectionClassification.from_type_classifications([tc])
+
+        doc = nlp("Test document")
+        doc._.classified_sections = [(section, classification)]
+
+        doc = processor(doc)
+
+        skill_texts = {s["skill"] for s in doc._.skills}
+        assert "design skills" not in skill_texts
+        assert "design" not in skill_texts
+        assert not any("design" in text for text in skill_texts)
+
+    def test_heading_marker_content_line_not_emitted_as_skill(self, nlp) -> None:
+        """Literal '## ' heading line inside content is not emitted as a skill (Issue #375).
+
+        Content begins with "## Technical Skills"; no entry may start with "#"
+        and the heading text must not leak as "technical skills".
+        """
+        processor = SkillProcessor(nlp, "skill_processor", min_confidence=0.70)
+
+        section = _make_section(title="Skills", content="## Technical Skills\n\n* Python\n* Go")
+        tc = TypeClassification(SectionType.SKILLS, 0.85, ("skill",))
+        classification = SectionClassification.from_type_classifications([tc])
+
+        doc = nlp("Test document")
+        doc._.classified_sections = [(section, classification)]
+
+        doc = processor(doc)
+
+        skill_texts = {s["skill"] for s in doc._.skills}
+        assert not any(text.startswith("#") for text in skill_texts)
+        assert "## technical skills" not in skill_texts
+        assert "technical skills" not in skill_texts
+
+    def test_real_skills_still_extracted_alongside_heading(self, nlp) -> None:
+        """Real bullet skills still extracted when a heading marker line is present (Issue #375)."""
+        processor = SkillProcessor(nlp, "skill_processor", min_confidence=0.70)
+
+        section = _make_section(title="Skills", content="## Technical Skills\n\n* Python\n* Go")
+        tc = TypeClassification(SectionType.SKILLS, 0.85, ("skill",))
+        classification = SectionClassification.from_type_classifications([tc])
+
+        doc = nlp("Test document")
+        doc._.classified_sections = [(section, classification)]
+
+        doc = processor(doc)
+
+        skill_texts = {s["skill"] for s in doc._.skills}
+        assert "python" in skill_texts
+        assert "go" in skill_texts
+        assert len(doc._.skills) >= 2
+
+    def test_non_promoted_native_heading_also_excluded(self, nlp) -> None:
+        """Native (non-promoted) SKILLS title with a SKILL_VERBS lemma is not emitted (Issue #375).
+
+        Title "Build Skills" stands in for a genuine source-markdown heading;
+        it must not appear as a standalone skill entry.
+        """
+        processor = SkillProcessor(nlp, "skill_processor", min_confidence=0.70)
+
+        section = _make_section(title="Build Skills", content="* Python\n* Go")
+        tc = TypeClassification(SectionType.SKILLS, 0.85, ("skill",))
+        classification = SectionClassification.from_type_classifications([tc])
+
+        doc = nlp("Test document")
+        doc._.classified_sections = [(section, classification)]
+
+        doc = processor(doc)
+
+        skill_texts = {s["skill"] for s in doc._.skills}
+        assert "build skills" not in skill_texts
+        assert "build" not in skill_texts
+        assert not any("build" in text for text in skill_texts)
