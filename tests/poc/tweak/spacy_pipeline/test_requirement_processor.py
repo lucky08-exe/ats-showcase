@@ -218,14 +218,19 @@ class TestRequirementProcessorMultiLineSplitting:
         # Should extract at least 4 requirements: split on both . and \n
         assert len(doc._.requirements) >= 4
 
-    def test_multiline_title_also_splits(self, nlp) -> None:
-        """Multi-line section titles are also split correctly."""
+    def test_multiline_content_also_splits(self, nlp) -> None:
+        """Multi-line section content is split into separate requirement lines.
+
+        Issue #375: section titles are no longer classified, so this test
+        exercises line splitting through section content (two trigger-bearing
+        lines) instead of the title.
+        """
         processor = RequirementProcessor(nlp, "requirement_processor")
 
         doc = nlp("Test")
         section = MarkdownSection(
-            title="Must have experience\nMust know frameworks",
-            content="Experience with Django",
+            title="Qualifications",
+            content="Must have experience with Django\nMust know frameworks",
             level=2,
             start_line=0,
             end_line=0,
@@ -238,7 +243,7 @@ class TestRequirementProcessorMultiLineSplitting:
 
         doc = processor(doc)
 
-        # Should extract requirements from both title (2 lines) and content (1)
+        # Each content line is classified separately
         assert len(doc._.requirements) >= 2
 
 
