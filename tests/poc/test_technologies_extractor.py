@@ -489,6 +489,42 @@ class TestTechExtractorVocabularyAdditions:
     def test_lightning_common_word_not_extracted(self, extractor, nlp, text):
         assert "lightning" not in extractor.extract(nlp(text))
 
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Experience with Lightning strikes.",
+            "Knowledge of Lightning storms.",
+        ],
+    )
+    def test_lightning_prev_cue_alone_not_extracted(self, extractor, nlp, text):
+        """#505: a prev-cue (with/of/experience) is not enough evidence for lightning."""
+        assert "lightning" not in extractor.extract(nlp(text))
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Experience with Lightning and Kafka.",
+            "Experience with PyTorch Lightning.",
+            "Built with Lightning, Kafka and Terraform.",
+        ],
+    )
+    def test_lightning_with_adjacent_tech_extracted(self, extractor, nlp, text):
+        """#505: adjacency to a TECH term (directly or via a list joiner) is kept."""
+        assert "lightning" in extractor.extract(nlp(text))
+
+    @pytest.mark.parametrize(
+        "text,expected",
+        [
+            ("Built with Go and gRPC.", "go"),
+            ("Experience with Go services.", "go"),
+            ("Experience with Spring Boot.", "spring"),
+            ("Experience with Vue.js.", "vue.js"),
+        ],
+    )
+    def test_other_ambiguous_terms_keep_prev_cue(self, extractor, nlp, text, expected):
+        """#505 regression: the lightning-only restriction must not affect go/spring/vue."""
+        assert expected in extractor.extract(nlp(text))
+
     def test_lightning_in_ambiguous_terms(self):
         """lightning is gated by the #475 ambiguity rules."""
         from src.poc.technologies.extract_technologies_a import AMBIGUOUS_TERMS

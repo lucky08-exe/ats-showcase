@@ -34,6 +34,13 @@ AMBIGUOUS_TERMS = frozenset({"go", "spring", "vue", "lightning"})
 _PREV_CUES = frozenset({"with", "in", "using", "use", "built", "written", "proficient", "experience", "of", "on"})
 _NEXT_CUES = frozenset({"boot", "framework", "mvc", "cloud", "data", "security", "lang", "js"})
 _LIST_JOINERS = frozenset({",", "and", "&", "/", "or"})
+# Terms whose common English meaning ("lightning strike") makes a preceding cue
+# ("with", "experience", "of") too weak to prove tech usage. For these, only a
+# following cue (_NEXT_CUES) or an adjacent TECH term counts as evidence.
+# Accepted limitation: "Built with Lightning." (no next cue, no adjacent TECH) is
+# now not extracted, and a next-cue collision such as "Lightning data storms" still
+# passes because _NEXT_CUES is shared across all ambiguous terms.
+_PREV_CUE_INSUFFICIENT = frozenset({"lightning"})
 
 
 def _is_tech_context(doc, ent, other_techs):
@@ -44,7 +51,7 @@ def _is_tech_context(doc, ent, other_techs):
     prev = doc[ent.start - 1] if ent.start > 0 else None
     if nxt is not None and (nxt.lower_ in _NEXT_CUES or doc.text[nxt.idx :].startswith(".js")):
         return True
-    if prev is not None and prev.lower_ in _PREV_CUES:
+    if prev is not None and prev.lower_ in _PREV_CUES and ent.text.lower() not in _PREV_CUE_INSUFFICIENT:
         return True
     # Adjacent to another TECH match (optionally across a list joiner)
     for tok_idx, step in ((ent.end, 1), (ent.start - 1, -1)):
