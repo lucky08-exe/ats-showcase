@@ -41,6 +41,14 @@ _LIST_JOINERS = frozenset({",", "and", "&", "/", "or"})
 # now not extracted, and a next-cue collision such as "Lightning data storms" still
 # passes because _NEXT_CUES is shared across all ambiguous terms.
 _PREV_CUE_INSUFFICIENT = frozenset({"lightning"})
+# Negation (#497). spaCy splits "don't"/"doesn't" into "do" + "n't", so "n't" is
+# listed explicitly. "nice to have" is deliberately NOT a cue (optional, not absent).
+_NEGATION_CUES = frozenset({"no", "not", "without", "never", "lacking", "nor", "n't"})
+# A contrast word between a cue and an entity ends the negation scope, so
+# "No prior experience needed, but Kubernetes is required." keeps kubernetes.
+_CONTRAST_RESET = frozenset({"but", "however", "though", "yet"})
+# Clause separators that also end a negation scope (list joiners are handled separately).
+_CLAUSE_STOPS = frozenset({";", ":"})
 
 
 def _is_tech_context(doc, ent, other_techs):
@@ -62,6 +70,55 @@ def _is_tech_context(doc, ent, other_techs):
     return False
 
 
+def _sentence_bounds(doc, ent):
+    """Token bounds of the entity's sentence; whole doc if no sentence boundaries are set."""
+    try:
+        sent = ent.sent
+    except ValueError:
+        return 0, len(doc)
+    return sent.start, sent.end
+
+
+def _has_negation_cue(doc, ent, tech_tokens):
+    """Scan outward from ent (both directions, same sentence) for a negation cue.
+
+    The scan stops at a negation cue (negated, unless a contrast word was crossed
+    first), or at a contrast word, list joiner, clause separator, or another TECH
+    token (no negation found in that direction).
+    """
+    lo, hi = _sentence_bounds(doc, ent)
+    for indices in (range(ent.start - 1, lo - 1, -1), range(ent.end, hi)):
+        for i in indices:
+            lower = doc[i].lower_
+            if lower in _NEGATION_CUES:
+                return True
+            if lower in _CONTRAST_RESET or lower in _LIST_JOINERS or lower in _CLAUSE_STOPS or i in tech_tokens:
+                break
+    return False
+
+
+def _list_joined(doc, a, b):
+    """True when a and b are adjacent or separated only by list joiners (e.g. ", or" in a serial list)."""
+    left, right = (a, b) if a.end <= b.start else (b, a)
+    gap = doc[left.end : right.start]
+    return len(gap) <= 2 and all(tok.lower_ in _LIST_JOINERS for tok in gap)
+
+
+def _negated_flags(doc, candidates, tech_tokens):
+    """Per-candidate negation flags; negation propagates across list joiners (#497)."""
+    negated = [_has_negation_cue(doc, ent, tech_tokens) for ent in candidates]
+    changed = True
+    while changed:
+        changed = False
+        for i, ent in enumerate(candidates):
+            if not negated[i] and any(
+                negated[j] and _list_joined(doc, ent, other) for j, other in enumerate(candidates) if j != i
+            ):
+                negated[i] = True
+                changed = True
+    return negated
+
+
 class TechExtractor:
     def __init__(self, nlp):
         self.nlp = nlp
@@ -80,10 +137,16 @@ class TechExtractor:
             unambiguous_tokens = {
                 i for ent in tech_ents if ent.text.lower() not in AMBIGUOUS_TERMS for i in range(ent.start, ent.end)
             }
-            techs_lower = {
-                ent.text.lower()
+            # Ambiguity gate first; negation is applied only to confirmed candidates (#497).
+            candidates = [
+                ent
                 for ent in tech_ents
                 if ent.text.lower() not in AMBIGUOUS_TERMS or _is_tech_context(doc, ent, unambiguous_tokens)
+            ]
+            all_tech_tokens = {i for ent in tech_ents for i in range(ent.start, ent.end)}
+            negated = _negated_flags(doc, candidates, all_tech_tokens)
+            techs_lower = {
+                ent.text.lower() for ent, is_negated in zip(candidates, negated, strict=True) if not is_negated
             }
             return sorted(techs_lower)
         except Exception as e:
