@@ -461,3 +461,36 @@ class TestTechExtractorPatternGeneration:
         assert len(multi_word_terms) > 0
         # Should include phrases
         assert any("vision" in t.lower() for t in multi_word_terms)
+
+
+class TestTechExtractorVocabularyAdditions:
+    """kafka, terraform, lightning added for #499."""
+
+    @pytest.mark.parametrize(
+        "text,expected",
+        [
+            ("Manage Kafka clusters on GCP.", "kafka"),
+            ("Ship Terraform modules for the platform.", "terraform"),
+            ("Built with PyTorch Lightning.", "lightning"),
+            ("Lightning, Kafka and Terraform.", "lightning"),
+        ],
+    )
+    def test_new_term_extracted(self, extractor, nlp, text, expected):
+        assert expected in extractor.extract(nlp(text))
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Lightning strike protection for the site.",
+            "We saw a lightning strike.",
+            "Lightning talks at the conference.",
+        ],
+    )
+    def test_lightning_common_word_not_extracted(self, extractor, nlp, text):
+        assert "lightning" not in extractor.extract(nlp(text))
+
+    def test_lightning_in_ambiguous_terms(self):
+        """lightning is gated by the #475 ambiguity rules."""
+        from src.poc.technologies.extract_technologies_a import AMBIGUOUS_TERMS
+
+        assert "lightning" in AMBIGUOUS_TERMS

@@ -38,11 +38,14 @@ TECH_TERMS = {
     "gcp",
     "kubernetes",
     "docker",
+    "kafka",
+    "terraform",
     # --- Databases & Search ---
     "postgresql",
     "mongodb",
     "redis",
     "elasticsearch",
+    "lightning",
     # --- Tools & Collaboration ---
     "git",
     "github",
