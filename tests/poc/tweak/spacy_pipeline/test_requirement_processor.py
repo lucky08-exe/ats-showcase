@@ -248,5 +248,113 @@ class TestRequirementProcessorMultiLineSplitting:
 
 
 # ============================================================================
+# Heading Exclusion Tests (Issue #375)
+# ============================================================================
+
+
+class TestRequirementProcessorHeadingExclusion:
+    """Test that markdown headings never become requirements (Issue #375)."""
+
+    def test_heading_title_not_emitted_as_requirement(self, nlp) -> None:
+        """Issue #375: a QUALIFICATIONS section title is never emitted as a requirement."""
+        processor = RequirementProcessor(nlp, "requirement_processor")
+
+        doc = nlp("Test")
+        section = MarkdownSection(
+            title="Essential Qualifications",
+            content="Bachelor degree in Computer Science or equivalent experience.",
+            level=2,
+            start_line=0,
+            end_line=0,
+            word_count=10,
+            line_count=1,
+            has_list=False,
+        )
+        classification = _make_classification(confidence=0.85)
+        doc._.classified_sections = [(section, classification)]
+
+        doc = processor(doc)
+
+        assert all(req["text"] != "Essential Qualifications" for req in doc._.requirements)
+
+    def test_heading_marker_content_line_not_emitted_as_requirement(self, nlp) -> None:
+        """Issue #375: a literal '## ' heading line inside content is not emitted as a requirement."""
+        processor = RequirementProcessor(nlp, "requirement_processor")
+
+        doc = nlp("Test")
+        section = MarkdownSection(
+            title="Qualifications",
+            content=(
+                "## Essential Qualifications\n\n"
+                "Bachelor degree in Computer Science or equivalent experience.\n"
+                "5+ years of software engineering experience."
+            ),
+            level=2,
+            start_line=0,
+            end_line=0,
+            word_count=18,
+            line_count=4,
+            has_list=False,
+        )
+        classification = _make_classification(confidence=0.85)
+        doc._.classified_sections = [(section, classification)]
+
+        doc = processor(doc)
+
+        assert all(not req["text"].startswith("#") for req in doc._.requirements)
+
+    def test_real_requirements_still_extracted_alongside_heading(self, nlp) -> None:
+        """Issue #375 regression guard: real body sentences are still extracted next to a heading line."""
+        processor = RequirementProcessor(nlp, "requirement_processor")
+
+        doc = nlp("Test")
+        section = MarkdownSection(
+            title="Qualifications",
+            content=(
+                "## Essential Qualifications\n\n"
+                "Bachelor degree in Computer Science or equivalent experience.\n"
+                "5+ years of software engineering experience."
+            ),
+            level=2,
+            start_line=0,
+            end_line=0,
+            word_count=18,
+            line_count=4,
+            has_list=False,
+        )
+        classification = _make_classification(confidence=0.85)
+        doc._.classified_sections = [(section, classification)]
+
+        doc = processor(doc)
+
+        texts = [req["text"] for req in doc._.requirements]
+        assert any("Bachelor degree in Computer Science or equivalent experience" in t for t in texts)
+        assert any("5+ years of software engineering experience" in t for t in texts)
+        assert len(doc._.requirements) >= 2
+
+    def test_non_promoted_native_heading_also_excluded(self, nlp) -> None:
+        """Issue #375: a native markdown heading used as a section title is not emitted, even with real content."""
+        processor = RequirementProcessor(nlp, "requirement_processor")
+
+        doc = nlp("Test")
+        section = MarkdownSection(
+            title="Required Skills",
+            content="Python experience with Django and REST APIs.",
+            level=2,
+            start_line=0,
+            end_line=0,
+            word_count=9,
+            line_count=1,
+            has_list=False,
+        )
+        classification = _make_classification(confidence=0.85)
+        doc._.classified_sections = [(section, classification)]
+
+        doc = processor(doc)
+
+        assert all(req["text"] != "Required Skills" for req in doc._.requirements)
+
+
+# ============================================================================
 # Run with: uv run pytest tests/poc/tweak/spacy_pipeline/test_requirement_processor.py -v
 # ============================================================================
