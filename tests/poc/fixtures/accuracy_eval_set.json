@@ -115,5 +115,91 @@
       "docker",
       "python"
     ]
+  },
+  {
+    "id": "s13",
+    "text": "Experience with Lightning strikes.",
+    "expected_skills": [],
+    "expected_technologies": []
+  },
+  {
+    "id": "s14",
+    "text": "Experience with Lightning and Kafka.",
+    "expected_skills": [],
+    "expected_technologies": [
+      "kafka",
+      "lightning"
+    ]
+  },
+  {
+    "id": "s15",
+    "text": "Built with Go and gRPC.",
+    "expected_skills": [],
+    "expected_technologies": [
+      "go",
+      "grpc"
+    ]
+  },
+  {
+    "id": "s16",
+    "text": "Experience with Go services.",
+    "expected_skills": [],
+    "expected_technologies": [
+      "go"
+    ]
+  },
+  {
+    "id": "s17",
+    "text": "Built with Lightning.",
+    "expected_skills": [],
+    "expected_technologies": [
+      "lightning"
+    ]
+  },
+  {
+    "id": "s18",
+    "text": "We do not use Go.",
+    "expected_skills": [],
+    "expected_technologies": []
+  },
+  {
+    "id": "s19",
+    "text": "Experience with PyTorch Lightning and Kafka.",
+    "expected_skills": [],
+    "expected_technologies": [
+      "kafka",
+      "pytorch",
+      "pytorch lightning"
+    ]
+  },
+  {
+    "id": "s20",
+    "text": "Experience with Vue and TypeScript.",
+    "expected_skills": [],
+    "expected_technologies": [
+      "typescript",
+      "vue"
+    ]
+  },
+  {
+    "id": "s21",
+    "text": "Experience with Spring Boot and Kafka.",
+    "expected_skills": [],
+    "expected_technologies": [
+      "kafka",
+      "spring boot"
+    ]
+  },
+  {
+    "id": "s22",
+    "text": "Experience with spring-loaded fixtures in manufacturing.",
+    "expected_skills": [],
+    "expected_technologies": []
+  },
+  {
+    "id": "s23",
+    "text": "Experience with Go-to-market strategy.",
+    "expected_skills": [],
+    "expected_technologies": []
   }
 ]
