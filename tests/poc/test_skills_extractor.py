@@ -263,11 +263,11 @@ class TestSkillExtractorEdgeCases:
         assert skills == ["design systems"]
 
     def test_hyphenated_noun(self, extractor):
-        """Handles hyphenated compound nouns."""
+        """Keeps the full hyphenated span (#508); no truncation at the hyphen."""
         text = "You will design high-performance distributed systems."
         skills = extractor.extract(text)
-        # Hyphen is PUNCT, so the noun run stops at "high".
-        assert skills == ["design high"]
+        # "distributed" is tagged VERB by the parser, so the run ends at the hyphen join.
+        assert skills == ["design high-performance"]
 
     def test_parenthetical_context(self, extractor):
         """Handles skill in parenthetical context."""
@@ -361,3 +361,71 @@ class TestSkillExtractorVocabularyAdditions:
     def test_ship_as_noun_not_extracted(self, extractor):
         """'ship' tagged as a noun is not treated as an action verb."""
         assert extractor.extract("The ship sailed at dawn.") == []
+
+
+class TestSkillExtractorHyphenatedNouns:
+    """Hyphen-joined noun runs (#508): full span kept, dashes as punctuation rejected."""
+
+    def test_hyphen_inside_noun_run(self, extractor):
+        """Hyphen joins two nouns; following nouns stay in the run."""
+        skills = extractor.extract("You will design high-performance data pipelines.")
+        assert skills == ["design high-performance data pipelines"]
+
+    def test_longest_span_over_hyphen_prefix(self, extractor):
+        """The hyphen variant beats the plain 'design high' prefix (longest span wins)."""
+        skills = extractor.extract("You will design high-performance systems.")
+        assert skills == ["design high-performance systems"]
+
+    def test_multiple_hyphenated_forms_two_verbs(self, extractor):
+        """Two hyphenated object phrases, each under its own verb."""
+        text = "You will design high-performance systems and develop fault-tolerant platforms."
+        skills = extractor.extract(text)
+        assert skills == ["design high-performance systems", "develop fault-tolerant platforms"]
+
+    def test_hyphen_in_second_conjunct(self, extractor):
+        """Hyphen in the second coordinated noun run extends the coordinated span."""
+        skills = extractor.extract("You will design systems and high-performance platforms.")
+        assert skills == ["design systems and high-performance platforms"]
+
+    def test_hyphen_in_first_conjunct(self, extractor):
+        """Hyphen in the first coordinated noun run keeps the 'and' conjunct (#498 shape)."""
+        skills = extractor.extract("Design high-performance systems and platforms.")
+        assert skills == ["design high-performance systems and platforms"]
+
+    def test_plain_nouns_unchanged(self, extractor):
+        """No hyphen: plain noun runs extract exactly as before."""
+        skills = extractor.extract("You will design machine learning systems.")
+        assert skills == ["design machine learning systems"]
+
+    def test_coordinated_nouns_without_hyphen_unchanged(self, extractor):
+        """#498 coordinated behaviour is intact when no hyphen is present."""
+        text = "Lead data science and platform teams building services in Python and Docker."
+        assert extractor.extract(text) == ["building services", "lead data science and platform teams"]
+
+    def test_spaced_hyphen_is_punctuation(self, extractor):
+        """A dash set off by spaces ends the span; it does not join nouns."""
+        assert extractor.extract("You will design systems - build tools.") == ["design systems"]
+
+    def test_spaced_hyphen_between_verb_and_noun(self, extractor):
+        """'design - build' has no noun run before the dash, so no skill is produced."""
+        assert extractor.extract("You will design - build systems.") == []
+
+    def test_spaced_hyphen_after_prefix(self, extractor):
+        """Spaced hyphen after a noun run does not join; plain prefix is kept."""
+        assert extractor.extract("You will design build - systems.") == ["design build"]
+
+    def test_unspaced_em_dash_not_joined(self, extractor):
+        """Em dash is a separate token and never joins a noun run."""
+        skills = extractor.extract("You will design systems—build tools.")
+        assert skills == ["design systems"]
+
+    def test_unspaced_en_dash_not_joined(self, extractor):
+        """En dash is a separate token and never joins a noun run."""
+        skills = extractor.extract("You will design systems–build tools.")
+        assert skills == ["design systems"]
+
+    def test_en_dash_inside_compound_not_joined(self, extractor):
+        """En dash inside a compound is not treated as an intra-word hyphen."""
+        skills = extractor.extract("You will design high\u2013performance systems.")
+        assert "design high-performance systems" not in skills
+        assert all("\u2013" not in s and "\u2014" not in s for s in skills)
