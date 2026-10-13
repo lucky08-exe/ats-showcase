@@ -166,6 +166,10 @@ class RequirementProcessor:
 
         Returns dict list: [{"text": str, "confidence": float, "source": str}, ...]
 
+        Section titles are not extracted (Issue #375); only section content is
+        classified, and content lines starting with "#" (markdown headings) are
+        skipped.
+
         Handles edge cases gracefully:
         - If doc._.classified_sections is None: treats as empty list
         - If doc._.classified_sections is empty: doc._.requirements = []
@@ -206,22 +210,17 @@ class RequirementProcessor:
                         )
                         continue
 
-                # Extract from section title
-                if section.title:
-                    for sentence in re.split(r"[.\r\n]+", section.title):
-                        sentence = sentence.strip()
-                        if not sentence:
-                            continue
-
-                        req = self._classify_sentence(sentence)
-                        if req:
-                            requirements.append(req)
-
-                # Extract from section content
+                # Extract from section content. Section titles are never
+                # classified (Issue #375): headings must not become requirements.
                 if section.content:
                     for sentence in re.split(r"[.\r\n]+", section.content):
                         sentence = sentence.strip()
                         if not sentence:
+                            continue
+
+                        # Issue #375: skip literal markdown heading lines
+                        # (e.g. "## Essential Qualifications") inside content.
+                        if sentence.startswith("#"):
                             continue
 
                         req = self._classify_sentence(sentence)
@@ -229,7 +228,7 @@ class RequirementProcessor:
                             requirements.append(req)
 
             except Exception as e:
-                logger.error(f"Error extracting requirements from section '{section.title}': {e}")
+                logger.error(f"Error extracting requirements from section at line {section.start_line}: {e}")
                 # Continue with next section
                 continue
 
