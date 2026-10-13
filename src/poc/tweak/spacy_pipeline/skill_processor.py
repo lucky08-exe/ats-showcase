@@ -357,6 +357,9 @@ class SkillProcessor:
         Reads doc._.classified_sections and extracts skills from sections
         classified as SKILLS type only.
 
+        Only section content lines are candidates; section titles and literal
+        "#" heading lines are never extracted (Issue #375).
+
         For each line:
         1. First attempts verb-led extraction using Matcher
         2. If verb Matcher yields no spans, falls back to noun-led extraction
@@ -417,12 +420,10 @@ class SkillProcessor:
                         )
                         continue
 
-                # Segment title and content separately (Issue #354)
-                # This prevents Matcher patterns from spanning across line boundaries
-                # and avoids merging title with first content line
+                # Only content lines are candidate text (Issue #354, Issue #375).
+                # Section titles are headings by construction and are never treated as
+                # skill-bearing text; the title is still used for title-echo detection below.
                 text_lines = []
-                if section.title:
-                    text_lines.append(section.title)
                 if section.content:
                     text_lines.extend(section.content.splitlines())
 
@@ -433,6 +434,11 @@ class SkillProcessor:
                 for line in text_lines:
                     line_stripped = line.strip()
                     if not line_stripped:
+                        continue
+
+                    # Skip literal markdown heading lines such as "## Technical Skills"
+                    # so heading text never reaches the Matcher or noun-led fallback (Issue #375)
+                    if line_stripped.startswith("#"):
                         continue
 
                     try:
