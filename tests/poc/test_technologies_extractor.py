@@ -292,17 +292,58 @@ class TestTechExtractorEdgeCases:
         # JavaScript may or may not be in TECH_TERMS
         assert isinstance(techs, list)
 
-    def test_negation_not_handled_known_limitation(self, extractor, nlp):
-        """Negation handling is NOT implemented; this only checks a non-term is absent.
+    def test_negated_known_term_not_extracted(self, extractor, nlp):
+        """Negated known term is dropped (#497). Previously "kubernetes" was extracted."""
+        doc = nlp("No experience with Kubernetes required.")
+        assert extractor.extract(doc) == []
 
-        "COBOL" is not in TECH_TERMS, so it must not be extracted. This does not
-        verify negation logic: a negated known term (e.g. "No experience with Python")
-        would still be extracted.
-        """
-        text = "No experience with COBOL required."
-        doc = nlp(text)
-        techs = extractor.extract(doc)
-        assert all("cobol" not in t.lower() for t in techs)
+
+class TestTechExtractorNegation:
+    """Negated technologies are not extracted (#497). Scope: sentence-bounded, both directions."""
+
+    @pytest.mark.parametrize(
+        "text,expected",
+        [
+            # 1-5: cue types (no, not, without, never, lacking)
+            ("No experience with Kubernetes required.", []),
+            ("Experience with Kubernetes is not required.", []),
+            ("Without Kubernetes experience, you can still apply.", []),
+            ("We have never used Kubernetes in production.", []),
+            ("Kubernetes experience is lacking on the current team.", []),
+            # 6: list-joiner propagation
+            ("No Java, Kubernetes, or Docker experience required.", []),
+            # 7: positive control, "nice to have" is not a negation cue
+            ("Kubernetes experience is nice to have.", ["kubernetes"]),
+            # 8: contrast word resets negation (false-negative guard)
+            ("No prior experience needed, but Kubernetes is required.", ["kubernetes"]),
+            # 9: cue in a previous sentence does not suppress the next one
+            ("No Java experience. Kubernetes is required for this role.", ["kubernetes"]),
+            # 10: the reproduced eval s4 sentence
+            ("No experience required. Strong Python skills are a must.", ["python"]),
+            # 11: contrast word stops negation from reaching affirmed entities
+            ("Not a Kubernetes shop, but we do use Docker and Python.", ["docker", "python"]),
+            # 12: contracted negation (spaCy tokenizes as "do" + "n't")
+            ("Don't need Kubernetes experience for this role.", []),
+            # 13: cue sentence "No." followed by an affirmed mention
+            ("No. Kubernetes experience is valued in this role.", ["kubernetes"]),
+            # extra guards: clause separator, contrast after a negated list, joined affirmed term
+            ("Kubernetes is required; no Java needed.", ["kubernetes"]),
+            ("Kubernetes and Docker are not required.", []),
+            ("Kubernetes is required but not Docker.", ["kubernetes"]),
+        ],
+    )
+    def test_negation_scope(self, extractor, nlp, text, expected):
+        assert extractor.extract(nlp(text)) == expected
+
+    def test_negation_without_parser_sentences_scans_whole_doc(self):
+        """No sentence boundaries (no parser): negation still applied, not an error."""
+        blank = spacy.blank("en")
+        blank.add_pipe("entity_ruler")
+        extractor = TechExtractor(blank)
+        doc = blank("No experience with Kubernetes required.")
+        assert extractor.extract(doc) == []
+        # Positive control: the fallback path still extracts non-negated terms (not a silent [] from the except).
+        assert extractor.extract(blank("We use Kubernetes daily.")) == ["kubernetes"]
 
 
 class TestTechExtractorSorting:

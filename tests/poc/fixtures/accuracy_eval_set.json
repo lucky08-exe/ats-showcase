@@ -84,5 +84,36 @@
       "pytorch",
       "pytorch lightning"
     ]
+  },
+  {
+    "id": "s9",
+    "text": "No Java, Kubernetes, or Docker experience required.",
+    "expected_skills": [],
+    "expected_technologies": []
+  },
+  {
+    "id": "s10",
+    "text": "Kubernetes experience is nice to have.",
+    "expected_skills": [],
+    "expected_technologies": [
+      "kubernetes"
+    ]
+  },
+  {
+    "id": "s11",
+    "text": "No prior experience needed, but Kubernetes is required.",
+    "expected_skills": [],
+    "expected_technologies": [
+      "kubernetes"
+    ]
+  },
+  {
+    "id": "s12",
+    "text": "Not a Kubernetes shop, but we do use Docker and Python.",
+    "expected_skills": [],
+    "expected_technologies": [
+      "docker",
+      "python"
+    ]
   }
 ]
