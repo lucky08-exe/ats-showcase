@@ -290,7 +290,7 @@ class TestSkillExtractorSorting:
         """Mixed-case input yields sorted, lowercase output."""
         text = "You will design systems. You will BUILD tools. You will manage teams."
         skills = extractor.extract(text)
-        assert skills == ["build tools", "design systems"]
+        assert skills == ["build tools", "design systems", "manage teams"]
 
 
 class TestSkillExtractorPerformance:
@@ -317,3 +317,34 @@ class TestSkillExtractorPerformance:
         skills1 = extractor.extract(text)
         skills2 = extractor.extract(text)
         assert skills1 == skills2
+
+
+class TestSkillExtractorVocabularyAdditions:
+    """Verbs added for #499 (manage, ship, evaluate)."""
+
+    def test_new_verbs_in_skill_verbs(self):
+        """New verbs are registered in SKILL_VERBS."""
+        assert {"manage", "ship", "evaluate"} <= set(SKILL_VERBS)
+
+    @pytest.mark.parametrize(
+        "text,expected",
+        [
+            ("You will manage teams.", ["manage teams"]),
+            ("You will ship products.", ["ship products"]),
+            ("You will evaluate vendors.", ["evaluate vendors"]),
+        ],
+    )
+    def test_new_verb_extracted(self, extractor, text, expected):
+        """Base and inflected forms of new verbs produce a skill phrase."""
+        assert extractor.extract(text) == expected
+
+    def test_inflected_new_verb_extracted(self, extractor):
+        """Inflected forms lemmatize to the new verb."""
+        assert extractor.extract("Managing teams and evaluating vendors.") == [
+            "evaluating vendors",
+            "managing teams",
+        ]
+
+    def test_ship_as_noun_not_extracted(self, extractor):
+        """'ship' tagged as a noun is not treated as an action verb."""
+        assert extractor.extract("The ship sailed at dawn.") == []

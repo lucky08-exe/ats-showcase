@@ -30,7 +30,7 @@ def _generate_patterns():
     return patterns
 
 
-AMBIGUOUS_TERMS = frozenset({"go", "spring", "vue"})
+AMBIGUOUS_TERMS = frozenset({"go", "spring", "vue", "lightning"})
 _PREV_CUES = frozenset({"with", "in", "using", "use", "built", "written", "proficient", "experience", "of", "on"})
 _NEXT_CUES = frozenset({"boot", "framework", "mvc", "cloud", "data", "security", "lang", "js"})
 _LIST_JOINERS = frozenset({",", "and", "&", "/", "or"})
