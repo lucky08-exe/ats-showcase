@@ -546,3 +546,73 @@ class TestSkillExtractorCoordination:
         assert extractor.extract("Design high-performance systems and platforms.") == [
             "design high-performance systems and platforms"
         ]
+
+
+class TestSkillExtractorVerbTaggedNoun:
+    """Skill verbs tagged NOUN after 'and'/'or' (#511).
+
+    spaCy sometimes tags a coordinated verb as NOUN (dep ``conj``): "... GCP and
+    ship Terraform modules". The Matcher needs VERB, so such a token starts its own
+    match only when its lemma is in SKILL_VERBS, its dep is ``conj``, and an object
+    noun group follows it (optionally after one connector). Without an object
+    ("the ship and crew") or with a non-conj dep ("Hiring the crew and ship
+    captains") it stays a noun.
+
+    A verb-tagged-NOUN conjunct is never merged into the previous span: it is its
+    own skill, the same as a verb conjunct ("design systems and develop platforms").
+    """
+
+    def test_s2_verb_after_and_extracts_object(self, extractor):
+        """s2 eval sentence: 'ship' conj after 'GCP and' yields 'ship terraform modules'."""
+        text = "Manage Kafka clusters on GCP and ship Terraform modules for the platform team."
+        assert extractor.extract(text) == ["manage kafka clusters", "ship terraform modules"]
+
+    def test_noun_use_ship_and_crew_not_matched(self, extractor):
+        """'the ship and crew' is a noun coordination: no skill is produced."""
+        assert extractor.extract("Stakeholders across the ship and crew need data.") == []
+
+    def test_noun_use_ship_and_crew_after_verb_not_matched(self, extractor):
+        """'brief the ship and crew' has no verb-tagged-NOUN start: no skill."""
+        assert extractor.extract("Brief the ship and crew on the plan.") == []
+
+    def test_compound_noun_modifier_not_matched(self, extractor):
+        """'ship' as a compound modifier (dep not conj) never starts a match."""
+        assert extractor.extract("Hiring the crew and ship captains for the fleet.") == []
+        assert extractor.extract("We value the test and ship process.") == []
+
+    def test_comma_and_verb_tagged_noun_splits(self, extractor):
+        """'lead data, and build platforms': 'build' (NOUN) is not merged into 'lead data'."""
+        assert extractor.extract("You will lead data, and build platforms.") == [
+            "build platforms",
+            "lead data",
+        ]
+
+    def test_and_verb_tagged_noun_splits(self, extractor):
+        """'lead data and build platforms': 'build' (NOUN) starts its own span."""
+        assert extractor.extract("You will lead data and build platforms.") == [
+            "build platforms",
+            "lead data",
+        ]
+
+    def test_verb_tagged_noun_chain_stays_one_span(self, extractor):
+        """A verb-tagged-NOUN start extends through its own 'and' conjuncts (#509 walker)."""
+        text = "Manage Kafka clusters on GCP and ship Terraform modules and Helm charts."
+        assert extractor.extract(text) == ["manage kafka clusters", "ship terraform modules and helm charts"]
+
+    def test_or_verb_tagged_noun_not_merged_with_head(self, extractor):
+        """'or' + verb-tagged-NOUN after a head: two spans, the verb is not merged (#509 'or' rule)."""
+        text = "Manage Kafka clusters on GCP or ship Terraform modules."
+        assert extractor.extract(text) == ["manage kafka clusters", "ship terraform modules"]
+
+    def test_ambiguous_verbs_as_nouns_not_matched(self, extractor):
+        """Ambiguous verbs (ship/build/manage/design/test) used as nouns are not skills."""
+        assert extractor.extract("Our crew and ship maintenance team is hiring.") == []
+
+    def test_509_regressions_unchanged(self, extractor):
+        """#509 spans are unchanged: serial lists, 'or' chains, hyphen conjuncts."""
+        assert extractor.extract("You will lead data, platform, and ML teams.") == ["lead data, platform, and ml teams"]
+        assert extractor.extract("You will design systems or develop platforms.") == [
+            "design systems",
+            "develop platforms",
+        ]
+        assert extractor.extract("You will lead data or ML teams.") == ["lead data or ml teams"]
