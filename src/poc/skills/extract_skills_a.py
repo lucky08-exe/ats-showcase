@@ -7,6 +7,10 @@ from spacy.util import filter_spans
 
 from .patterns import SKILL_VERBS
 
+_SKILL_VERB_SET = frozenset(SKILL_VERBS)
+# Tokens that may sit between a verb and its object ('ship TO the market', 'ship THE platform').
+_CONNECTOR_POS = ("ADP", "DET", "PART")
+
 logger = logging.getLogger(__name__)
 
 # POS tags that can form a noun run (a head object or a coordinated conjunct).
@@ -55,11 +59,42 @@ def _has_spaced_dash(span: Span) -> bool:
 # after a comma) precedes it. Bare-comma conjuncts are tentative: they are kept
 # only if a later conjunction-led conjunct commits.
 #
-# #511 SEAM: _conjunct_end() is the single place that decides whether a token can
-# start a conjunct. The "verb tagged NOUN after 'and'" guard belongs there.
+# --- Verb tagged NOUN (#511) ----------------------------------------------------
+#
+# spaCy sometimes tags a coordinated skill verb as NOUN with dep 'conj':
+#   "manage Kafka clusters on GCP and ship Terraform modules"
+# The Matcher needs VERB, so such a token never starts a match. The guard below
+# lets it start its own match when ALL of these hold:
+#   - tag NOUN and dep conj, and the lemma is in SKILL_VERBS;
+#   - an object noun group follows (optionally after one connector).
+# "the ship and crew" fails the dep test (ship is not conj) and "and crew" has no
+# verb lemma, so noun coordination is not matched.
+#
+# A verb-tagged-NOUN conjunct that passes the guard is never merged into the
+# preceding span: _conjunct_end() refuses it, so it becomes its own match, the same
+# as a VERB conjunct ("design systems and develop platforms").
 
 
-def _conjunct_end(doc: Doc, start: int) -> int | None:
+def _is_verb_tagged_noun(tok: Token) -> bool:
+    """True for a skill verb that spaCy tagged NOUN as a conjunct (#511)."""
+    return tok.pos_ == "NOUN" and tok.dep_ == "conj" and tok.lemma_ in _SKILL_VERB_SET
+
+
+def _verb_start_end(doc: Doc, start: int) -> int | None:
+    """End (exclusive) of the object of a verb-tagged-NOUN start at ``start``, or None.
+
+    None unless the guard passes: the token is a verb-tagged-NOUN conjunct and an
+    object noun run follows it, optionally after one connector.
+    """
+    if start >= len(doc) or not _is_verb_tagged_noun(doc[start]):
+        return None
+    obj = start + 1
+    if obj < len(doc) and doc[obj].pos_ in _CONNECTOR_POS:
+        obj += 1
+    return _noun_run_end(doc, obj)
+
+
+def _noun_run_end(doc: Doc, start: int) -> int | None:
     """End (exclusive) of a noun run starting at ``start``, or None.
 
     The run is maximal over _NOUN_RUN_POS tokens and may contain one glued
@@ -72,6 +107,17 @@ def _conjunct_end(doc: Doc, start: int) -> int | None:
         if end + 1 < len(doc) and doc[end + 1].pos_ in _NOUN_RUN_POS:
             end = _run_end(doc, end + 1)
     return end
+
+
+def _conjunct_end(doc: Doc, start: int) -> int | None:
+    """End (exclusive) of a conjunct noun run starting at ``start``, or None.
+
+    None also when ``start`` is a verb-tagged-NOUN that passes the #511 guard: it
+    starts its own match and must not be merged into the preceding span.
+    """
+    if _verb_start_end(doc, start) is not None:
+        return None
+    return _noun_run_end(doc, start)
 
 
 def _run_end(doc: Doc, start: int) -> int:
@@ -170,7 +216,12 @@ class SkillExtractor:
         try:
             # 3. Find matches in the document
             # 'as_spans=True' returns spaCy Span objects instead of ID tuples
-            matches = self.matcher(doc, as_spans=True)
+            matches = list(self.matcher(doc, as_spans=True))
+            # Verb-tagged-NOUN starts (#511) are matched by the guard, not the Matcher.
+            for i in range(len(doc)):
+                obj_end = _verb_start_end(doc, i)
+                if obj_end is not None:
+                    matches.append(doc[i:obj_end])
             # Drop hyphen-variant matches whose "-" is spaced punctuation; the plain
             # pattern still yields the non-hyphenated prefix for those sentences.
             matches = [m for m in matches if not _has_spaced_dash(m)]
