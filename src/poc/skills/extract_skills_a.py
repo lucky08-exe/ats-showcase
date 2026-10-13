@@ -2,28 +2,115 @@ import logging
 
 import spacy
 from spacy.matcher import Matcher
-from spacy.tokens import Span
+from spacy.tokens import Doc, Span, Token
 from spacy.util import filter_spans
 
 from .patterns import SKILL_VERBS
 
 logger = logging.getLogger(__name__)
 
+# POS tags that can form a noun run (a head object or a coordinated conjunct).
+_NOUN_RUN_POS = ("ADJ", "NOUN", "PROPN")
+# Conjunctions that can join conjuncts ("data and ML", "data or ML").
+_JOIN_CONJUNCTIONS = ("and", "or")
 
-def _has_spaced_dash(span: Span) -> bool:
-    """True if a "-" token in the span is not glued to both neighbours.
+
+def _is_spaced_dash(tok: Token) -> bool:
+    """True if a "-" token is not glued to both neighbours.
 
     spaCy keeps "high-performance" as [high, -, performance] with no whitespace
     around the "-", so the hyphen can join a noun run. A dash set off by spaces
     ("design systems - build tools") is punctuation and must end the span.
     Em/en dashes ("—", "–") are different tokens and never match the "-" pattern.
     """
-    for tok in span:
-        if tok.text != "-":
-            continue
-        if tok.whitespace_ or span.doc[tok.i - 1].whitespace_:
-            return True
-    return False
+    return tok.text == "-" and bool(tok.whitespace_ or tok.doc[tok.i - 1].whitespace_)
+
+
+def _has_spaced_dash(span: Span) -> bool:
+    """True if a "-" token in the span is not glued to both neighbours."""
+    return any(_is_spaced_dash(tok) for tok in span)
+
+
+# --- Coordination extension (#509) ---------------------------------------------
+#
+# The Matcher finds a HEAD: action verb, optional connector, noun run, with at
+# most one hyphen join (see SkillExtractor patterns). _coordinated_end() then
+# grows the head through a chain of conjuncts. Matcher token patterns cannot
+# repeat a multi-token group, so one walker covers "A and B", "A or B",
+# "A, B, and C", "A, B and C" and chains of any length.
+#
+# Intended spans (HEAD ends where the list starts; [...] is the added tail):
+#   "lead data [or ML teams]"                 -> "lead data or ml teams"
+#   "lead data [, platform, and ML teams]"    -> "lead data, platform, and ml teams"
+#   "lead data [, platform and ML teams]"     -> "lead data, platform and ml teams"
+#   "lead data [and ML or cloud teams]"       -> mixed and/or chain merges
+#   "build or develop data pipelines"         -> "develop data pipelines" (no merge:
+#                                                "or" is followed by a VERB)
+#   "lead data science, platform teams"       -> "lead data science" (bare comma)
+#   "design systems, platforms, and develop"  -> "design systems" + "develop ..."
+#                                                (tail commits only at the conjunct
+#                                                before the VERB, which is rejected)
+#
+# A conjunct commits the span end only when a conjunction ("and"/"or", optionally
+# after a comma) precedes it. Bare-comma conjuncts are tentative: they are kept
+# only if a later conjunction-led conjunct commits.
+#
+# #511 SEAM: _conjunct_end() is the single place that decides whether a token can
+# start a conjunct. The "verb tagged NOUN after 'and'" guard belongs there.
+
+
+def _conjunct_end(doc: Doc, start: int) -> int | None:
+    """End (exclusive) of a noun run starting at ``start``, or None.
+
+    The run is maximal over _NOUN_RUN_POS tokens and may contain one glued
+    hyphen join ("high-performance"). Spaced dashes end the run.
+    """
+    if start >= len(doc) or doc[start].pos_ not in _NOUN_RUN_POS:
+        return None
+    end = _run_end(doc, start)
+    if end < len(doc) and doc[end].text == "-" and not _is_spaced_dash(doc[end]):
+        if end + 1 < len(doc) and doc[end + 1].pos_ in _NOUN_RUN_POS:
+            end = _run_end(doc, end + 1)
+    return end
+
+
+def _run_end(doc: Doc, start: int) -> int:
+    """Index just past the contiguous _NOUN_RUN_POS tokens starting at ``start``."""
+    end = start
+    while end < len(doc) and doc[end].pos_ in _NOUN_RUN_POS:
+        end += 1
+    return end
+
+
+def _is_join_conjunction(tok: Token) -> bool:
+    return tok.pos_ == "CCONJ" and tok.lower_ in _JOIN_CONJUNCTIONS
+
+
+def _coordinated_end(doc: Doc, head_end: int) -> int:
+    """Return the end of the coordinated span that starts at a head ending at ``head_end``.
+
+    Returns ``head_end`` unchanged when no conjunction-led conjunct follows.
+    """
+    committed = head_end
+    cursor = head_end
+    while cursor < len(doc):
+        if doc[cursor].text == ",":
+            # ", and X" / ", or X" commits; a bare ", X" is tentative.
+            after_comma = cursor + 1
+            commits = after_comma < len(doc) and _is_join_conjunction(doc[after_comma])
+            run_start = after_comma + 1 if commits else after_comma
+        elif _is_join_conjunction(doc[cursor]):
+            commits = True
+            run_start = cursor + 1
+        else:
+            break
+        run_end = _conjunct_end(doc, run_start)
+        if run_end is None:
+            break
+        if commits:
+            committed = run_end
+        cursor = run_end
+    return committed
 
 
 class SkillExtractor:
@@ -62,56 +149,16 @@ class SkillExtractor:
 
         pattern = [action_verb(), connector(), noun_group()]
 
-        # Coordinated objects: [Verb] [Connector] [Nouns] "and" [Nouns]
-        # (e.g., "lead data science AND platform teams"). Without this, the span
-        # stops at "and" and the second conjunct is lost. Only "and" followed by
-        # a noun run extends the span; "and" + VERB (e.g., "design and develop")
-        # does not match and keeps the single-verb behaviour.
-        coordinated_pattern = [
-            action_verb(),
-            connector(),
-            noun_group(),
-            {"POS": "CCONJ", "LOWER": "and"},
-            noun_group(),
-        ]
+        # Coordinated objects ("lead data science and platform teams") are not matched
+        # here: _coordinated_end() extends each head through and/or/serial conjuncts (#509).
 
         # Hyphenated compounds: "high-performance" is tokenized [high, -, performance]
         # and the "-" is PUNCT, which would stop the noun run at "high". These variants
         # let one intra-word hyphen join two noun runs; spaced dashes are rejected in
         # extract() via _has_spaced_dash(). Only one hyphen join per run is matched.
         hyphen_pattern = [action_verb(), connector(), noun_group(), {"ORTH": "-"}, noun_group()]
-        # Hyphen in the first conjunct ("high-performance systems and platforms") ...
-        hyphen_first_coordinated_pattern = [
-            action_verb(),
-            connector(),
-            noun_group(),
-            {"ORTH": "-"},
-            noun_group(),
-            {"POS": "CCONJ", "LOWER": "and"},
-            noun_group(),
-        ]
-        # ... and in the second conjunct ("systems and high-performance platforms").
-        coordinated_hyphen_pattern = [
-            action_verb(),
-            connector(),
-            noun_group(),
-            {"POS": "CCONJ", "LOWER": "and"},
-            noun_group(),
-            {"ORTH": "-"},
-            noun_group(),
-        ]
-
         # Add patterns to matcher
-        self.matcher.add(
-            "SKILL_PHRASE",
-            [
-                pattern,
-                coordinated_pattern,
-                hyphen_pattern,
-                hyphen_first_coordinated_pattern,
-                coordinated_hyphen_pattern,
-            ],
-        )
+        self.matcher.add("SKILL_PHRASE", [pattern, hyphen_pattern])
 
     def extract(self, text):
         try:
@@ -127,11 +174,14 @@ class SkillExtractor:
             # Drop hyphen-variant matches whose "-" is spaced punctuation; the plain
             # pattern still yields the non-hyphenated prefix for those sentences.
             matches = [m for m in matches if not _has_spaced_dash(m)]
+            # Extend each head through its coordinated conjuncts (#509). The extended
+            # span contains the head, so filter_spans keeps it over the bare head.
+            extended = [doc[m.start : _coordinated_end(doc, m.end)] for m in matches]
 
             # 4. Best Practice: Filter Overlaps
             # If the matcher finds "design architectures" and "design deep learning architectures",
             # filter_spans will only keep the longest one.
-            unique_spans = filter_spans(matches)
+            unique_spans = filter_spans(matches + extended)
 
             # Clean the text: strip whitespace and convert to lowercase
             results = [span.text.replace("\n", " ").strip().lower() for span in unique_spans]

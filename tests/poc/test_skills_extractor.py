@@ -429,3 +429,120 @@ class TestSkillExtractorHyphenatedNouns:
         skills = extractor.extract("You will design high\u2013performance systems.")
         assert "design high-performance systems" not in skills
         assert all("\u2013" not in s and "\u2014" not in s for s in skills)
+
+
+class TestSkillExtractorCoordination:
+    """Coordinated object spans after a skill verb (#509, extends #498 'and').
+
+    Span semantics. HEAD = verb [connector] noun run (at most one glued hyphen
+    join), as before. A CONJUNCT is a noun run of the same form. The span grows
+    from the head through a chain of conjuncts:
+
+    - "and" / "or" join conjuncts:
+        "lead data or ML teams"            -> "lead data or ml teams"
+    - Serial list closed by a conjunction ("A, B, and C" or "A, B and C"):
+        "lead data, platform, and ML teams" -> one span (Oxford comma optional)
+    - Mixed "and"/"or" chains merge:
+        "lead data and ML or cloud teams"  -> one span
+    - A conjunction followed by a VERB never merges (#498 rule, now for "or"):
+        "build or develop data pipelines"  -> "develop data pipelines" only
+        "design systems or develop platforms" -> two spans
+    - A bare comma is punctuation unless a conjunction-led conjunct follows it.
+        "lead data science, platform teams" -> "lead data science"
+        "design systems, platforms, and develop tools"
+                                           -> "design systems", "develop tools"
+    - Hyphen joins inside any conjunct stay in the span (#508).
+    - Spaced dash ("platforms - build") is punctuation and ends the span.
+    """
+
+    def test_or_conjunct_merges(self, extractor):
+        """'or' between noun runs is a coordinated object: one span."""
+        assert extractor.extract("You will lead data or ML teams.") == ["lead data or ml teams"]
+
+    def test_or_before_verb_not_merged(self, extractor):
+        """'or' followed by a verb stays two verbs; no 'build or develop' span."""
+        assert extractor.extract("You will build or develop data pipelines.") == ["develop data pipelines"]
+
+    def test_or_after_head_before_verb_not_merged(self, extractor):
+        """'or' + verb after a complete head keeps two separate spans."""
+        assert extractor.extract("You will design systems or develop platforms.") == [
+            "design systems",
+            "develop platforms",
+        ]
+
+    def test_serial_list_with_oxford_comma(self, extractor):
+        """'A, B, and C' is one coordinated span."""
+        assert extractor.extract("You will lead data, platform, and ML teams.") == ["lead data, platform, and ml teams"]
+
+    def test_serial_list_without_oxford_comma(self, extractor):
+        """'A, B and C' (no comma before the final conjunction) is one span."""
+        assert extractor.extract("You will lead data, platform and ML teams.") == ["lead data, platform and ml teams"]
+
+    def test_serial_list_with_or(self, extractor):
+        """A serial list may be closed by 'or'."""
+        assert extractor.extract("You will lead data, platform, or ML teams.") == ["lead data, platform, or ml teams"]
+
+    def test_mixed_and_or_chain_merges(self, extractor):
+        """Mixed 'and'/'or' conjuncts form one coordinated noun span."""
+        assert extractor.extract("You will lead data and ML or cloud teams.") == ["lead data and ml or cloud teams"]
+
+    def test_chained_and_merges(self, extractor):
+        """A chain of 'and' conjuncts is one span, not only the first pair."""
+        assert extractor.extract("You will lead data and platform and ML teams.") == [
+            "lead data and platform and ml teams"
+        ]
+
+    def test_comma_without_conjunction_not_merged(self, extractor):
+        """A bare comma between noun runs is punctuation: the span stops at the comma."""
+        assert extractor.extract("You will lead data science, platform teams.") == ["lead data science"]
+
+    def test_comma_tail_before_verb_not_merged(self, extractor):
+        """Comma tail closed by 'and' + verb commits nothing; the verb is its own span."""
+        assert extractor.extract("You will design systems, platforms, and develop tools.") == [
+            "design systems",
+            "develop tools",
+        ]
+
+    def test_comma_tail_after_committed_conjunct_not_merged(self, extractor):
+        """Text after the committed 'and' conjunct, separated by a bare comma, is not merged."""
+        assert extractor.extract("You will lead data and platform teams, building services.") == [
+            "lead data and platform teams",
+        ]
+
+    def test_serial_list_with_hyphen_conjunct(self, extractor):
+        """Hyphen join inside a serial-list conjunct keeps the full span (#508)."""
+        assert extractor.extract("You will lead data, high-performance platform, and ML teams.") == [
+            "lead data, high-performance platform, and ml teams"
+        ]
+
+    def test_or_with_hyphen_conjunct(self, extractor):
+        """Hyphen join inside an 'or' conjunct keeps the full span (#508)."""
+        assert extractor.extract("You will design systems or high-performance platforms.") == [
+            "design systems or high-performance platforms"
+        ]
+
+    def test_hyphen_in_head_with_or_conjunct(self, extractor):
+        """Hyphen in the head noun run plus an 'or' conjunct (longest span wins)."""
+        assert extractor.extract("You will design high-performance systems or platforms.") == [
+            "design high-performance systems or platforms"
+        ]
+
+    def test_spaced_dash_in_serial_list_is_punctuation(self, extractor):
+        """A spaced dash after an uncommitted comma tail ends the span (#508)."""
+        assert extractor.extract("You will design systems, platforms - build tools.") == ["design systems"]
+
+    def test_498_and_coordination_unchanged(self, extractor):
+        """#498 regression: 'and' coordinated objects and 'and' + verb split."""
+        text = "Lead data science and platform teams building services in Python and Docker."
+        assert extractor.extract(text) == ["building services", "lead data science and platform teams"]
+        assert extractor.extract("You will design systems and develop platforms.") == [
+            "design systems",
+            "develop platforms",
+        ]
+
+    def test_508_hyphen_regression(self, extractor):
+        """#508 regression: hyphenated head and hyphenated 'and' conjunct."""
+        assert extractor.extract("You will design high-performance distributed systems.") == ["design high-performance"]
+        assert extractor.extract("Design high-performance systems and platforms.") == [
+            "design high-performance systems and platforms"
+        ]
