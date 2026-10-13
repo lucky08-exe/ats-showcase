@@ -2,6 +2,7 @@
 TECH_TERMS = {
     # --- Carbon Robotics / AI / Robotics Specific ---
     "PyTorch",
+    "pytorch lightning",
     "C++",
     "computer vision",
     "vision transformers",

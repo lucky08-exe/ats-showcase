@@ -49,6 +49,10 @@ _NEGATION_CUES = frozenset({"no", "not", "without", "never", "lacking", "nor", "
 _CONTRAST_RESET = frozenset({"but", "however", "though", "yet"})
 # Clause separators that also end a negation scope (list joiners are handled separately).
 _CLAUSE_STOPS = frozenset({";", ":"})
+# Multi-word TECH terms that also emit their first token as its own term (#504).
+# "PyTorch Lightning" yields "pytorch lightning" plus "pytorch" (as before this term
+# existed), but never a standalone "lightning": the longer match wins the overlap.
+_COMPOUND_HEADS = {"pytorch lightning": "pytorch"}
 
 
 def _is_tech_context(doc, ent, other_techs):
@@ -99,6 +103,9 @@ def _has_negation_cue(doc, ent, tech_tokens):
 
 def _list_joined(doc, a, b):
     """True when a and b are adjacent or separated only by list joiners (e.g. ", or" in a serial list)."""
+    if a.start < b.end and b.start < a.end:
+        # Overlapping spans (compound and its head term, #504) are not a list.
+        return False
     left, right = (a, b) if a.end <= b.start else (b, a)
     gap = doc[left.end : right.start]
     return len(gap) <= 2 and all(tok.lower_ in _LIST_JOINERS for tok in gap)
@@ -134,6 +141,8 @@ class TechExtractor:
             # Extract all TECH entities and normalize to lowercase for deduplication
             # This handles case-insensitive matching results (PyTorch vs pytorch)
             tech_ents = [ent for ent in doc.ents if ent.label_ == "TECH"]
+            heads = [doc[ent.start : ent.start + 1] for ent in tech_ents if ent.text.lower() in _COMPOUND_HEADS]
+            tech_ents = sorted(tech_ents + heads, key=lambda span: span.start)
             unambiguous_tokens = {
                 i for ent in tech_ents if ent.text.lower() not in AMBIGUOUS_TERMS for i in range(ent.start, ent.end)
             }
