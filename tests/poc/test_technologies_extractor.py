@@ -512,8 +512,8 @@ class TestTechExtractorVocabularyAdditions:
         [
             ("Manage Kafka clusters on GCP.", "kafka"),
             ("Ship Terraform modules for the platform.", "terraform"),
-            ("Built with PyTorch Lightning.", "lightning"),
             ("Lightning, Kafka and Terraform.", "lightning"),
+            ("Built with PyTorch Lightning.", "pytorch lightning"),
         ],
     )
     def test_new_term_extracted(self, extractor, nlp, text, expected):
@@ -545,7 +545,6 @@ class TestTechExtractorVocabularyAdditions:
         "text",
         [
             "Experience with Lightning and Kafka.",
-            "Experience with PyTorch Lightning.",
             "Built with Lightning, Kafka and Terraform.",
         ],
     )
@@ -566,8 +565,50 @@ class TestTechExtractorVocabularyAdditions:
         """#505 regression: the lightning-only restriction must not affect go/spring/vue."""
         assert expected in extractor.extract(nlp(text))
 
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Built with PyTorch Lightning.",
+            "Experience with PyTorch Lightning.",
+            "Research novel methods and evaluate them with PyTorch Lightning.",
+        ],
+    )
+    def test_pytorch_lightning_extracted_without_standalone_lightning(self, extractor, nlp, text):
+        """#504: the compound is extracted; its tokens do not yield a spurious 'lightning'."""
+        techs = extractor.extract(nlp(text))
+        assert "pytorch lightning" in techs
+        assert "pytorch" in techs
+        assert "lightning" not in techs
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "No PyTorch Lightning experience required.",
+            "We do not need PyTorch Lightning.",
+            "PyTorch Lightning is not required.",
+        ],
+    )
+    def test_negated_pytorch_lightning_dropped(self, extractor, nlp, text):
+        """#504/#497: a negated compound is dropped; an unnegated head is kept."""
+        techs = extractor.extract(nlp(text))
+        assert "pytorch lightning" not in techs
+        assert "lightning" not in techs
+
+    def test_negated_pytorch_lightning_keeps_unnegated_head(self, extractor, nlp):
+        """'PyTorch Lightning is not required': the negation scope covers the compound only."""
+        assert extractor.extract(nlp("PyTorch Lightning is not required.")) == ["pytorch"]
+
     def test_lightning_in_ambiguous_terms(self):
         """lightning is gated by the #475 ambiguity rules."""
         from src.poc.technologies.extract_technologies_a import AMBIGUOUS_TERMS
 
         assert "lightning" in AMBIGUOUS_TERMS
+
+    def test_pytorch_lightning_is_multi_word_term(self):
+        """#504: 'pytorch lightning' is a distinct TECH term; 'lightning' stays as is."""
+        from src.poc.technologies.extract_technologies_a import AMBIGUOUS_TERMS
+        from src.poc.technologies.patterns import TECH_TERMS
+
+        assert "pytorch lightning" in TECH_TERMS
+        assert "lightning" in TECH_TERMS
+        assert "pytorch lightning" not in AMBIGUOUS_TERMS
