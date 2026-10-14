@@ -201,6 +201,20 @@ def _is_glued_participle_head(doc: Doc, start: int) -> bool:
     )
 
 
+# --- Participial "built with <tech>" (#551) -------------------------------------
+#
+# "Built with Go and gRPC." names a stack; it is not a skill verb phrase. The Matcher's
+# action verb matches lemma "build" whatever its tag, and the optional connector takes
+# "with", so "Built with Go" (extended to "... and gRPC") was emitted. A past-tense or
+# participle skill verb followed by "with" is dropped. The base form "Build scalable
+# APIs with Python" (tag VB/VBP) and a participle not followed by "with" are unchanged.
+
+
+def _is_participial_with_head(doc: Doc, start: int) -> bool:
+    """True for a past-tense/participle skill verb followed by "with" ("Built with Go", #551)."""
+    return doc[start].tag_ in ("VBN", "VBD") and start + 1 < len(doc) and doc[start + 1].lower_ == "with"
+
+
 def _is_join_conjunction(tok: Token) -> bool:
     return tok.pos_ == "CCONJ" and tok.lower_ in _JOIN_CONJUNCTIONS
 
@@ -411,7 +425,13 @@ class SkillExtractor:
                     matches.append(doc[i:obj_end])
             # Drop hyphen-variant matches whose "-" is spaced punctuation; the plain
             # pattern still yields the non-hyphenated prefix for those sentences.
-            matches = [m for m in matches if not _has_spaced_dash(m) and not _is_glued_participle_head(doc, m.start)]
+            matches = [
+                m
+                for m in matches
+                if not _has_spaced_dash(m)
+                and not _is_glued_participle_head(doc, m.start)
+                and not _is_participial_with_head(doc, m.start)
+            ]
             # Extend each head through its coordinated conjuncts (#509). The extended
             # span contains the head, so filter_spans keeps it over the bare head.
             extended = [doc[m.start : _coordinated_end(doc, _participle_head_end(doc, m.end))] for m in matches]
