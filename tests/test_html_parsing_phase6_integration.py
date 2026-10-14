@@ -7,6 +7,7 @@ import pytest
 
 from src.parsers.html_to_markdown import add_markdown_section_headers
 from src.tokenization.preprocessor import Preprocessor
+from tests.perf_utils import median_elapsed_ms
 
 
 class TestHTMLParsingIntegration:
@@ -161,9 +162,7 @@ class TestHTMLParsingIntegration:
             "Apply: send resume to careers@company.com"
         )
 
-        start_time = time.time()
-        skills, tech, reqs = preprocessor.extract_entities(test_text)
-        elapsed_ms = (time.time() - start_time) * 1000
+        elapsed_ms = median_elapsed_ms(lambda: preprocessor.extract_entities(test_text), repeats=3, warmup=1)
 
         # Target <100ms per job
         assert elapsed_ms < 100, f"Extraction took {elapsed_ms:.1f}ms, exceeds target of 100ms"
@@ -307,12 +306,14 @@ class TestPerformanceMetrics:
             "Full-stack engineer. React, Node.js, PostgreSQL.",
         ]
 
-        start_time = time.time()
+        preprocessor.extract_entities(jobs[0])  # warm-up, untimed
+
+        start_time = time.perf_counter()
         results = []
         for job in jobs:
             skills, tech, reqs = preprocessor.extract_entities(job)
             results.append((skills, tech, reqs))
-        elapsed_ms = (time.time() - start_time) * 1000
+        elapsed_ms = (time.perf_counter() - start_time) * 1000
 
         avg_ms_per_job = elapsed_ms / len(jobs)
 
