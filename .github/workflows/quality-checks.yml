@@ -50,7 +50,7 @@ jobs:
       - name: Run tests with coverage
         run: |
           export PYTHONPATH="${{ github.workspace }}/src:$PYTHONPATH"
-          uv run pytest tests/ -v --cov=src -n auto --cov-report=term-missing --cov-report=xml
+          uv run pytest tests/ -v --ignore=tests/poc --cov=src -n auto --cov-report=term-missing --cov-report=xml
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
@@ -58,4 +58,48 @@ jobs:
           file: ./coverage.xml
           flags: unittests
           name: codecov-umbrella
+          fail_ci_if_error: false
+
+  quality-poc:
+    name: Quality Assurance (poc)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    # UV_PYTHON overrides .python-version (pinned to 3.12) so every uv call uses the matrix interpreter.
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Install dependencies with uv
+        run: uv sync --all-extras && uv run python --version
+
+      - name: Download spaCy model
+        run: uv run python -m spacy download en_core_web_md
+
+      - name: Run poc tests with coverage
+        run: |
+          export PYTHONPATH="${{ github.workspace }}/src:$PYTHONPATH"
+          uv run pytest tests/poc/ -v --cov=src -n auto --cov-report=xml
+
+      - name: Upload poc coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: unittests-poc
+          name: codecov-umbrella-poc
           fail_ci_if_error: false
