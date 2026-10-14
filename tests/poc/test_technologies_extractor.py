@@ -9,13 +9,13 @@ from src.poc.technologies.extract_technologies_a import TechExtractor
 from src.poc.technologies.patterns import TECH_TERMS
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def nlp():
     """Initialize spaCy model for TechExtractor."""
     return spacy.load("en_core_web_md")
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def extractor(nlp):
     """Initialize TechExtractor with spaCy pipeline."""
     return TechExtractor(nlp)

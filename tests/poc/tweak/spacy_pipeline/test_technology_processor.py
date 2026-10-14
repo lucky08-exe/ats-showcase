@@ -27,7 +27,7 @@ from src.poc.tweak.spacy_pipeline import TechnologyProcessor, registry  # noqa: 
 # ============================================================================
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def spacy_module():
     """Import spacy (skip test if not available)."""
     try:
@@ -38,7 +38,7 @@ def spacy_module():
         pytest.skip("spaCy not installed")
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def nlp(spacy_module: Any) -> Any:
     """Load spaCy model with entity_ruler + technology patterns registered."""
     try:

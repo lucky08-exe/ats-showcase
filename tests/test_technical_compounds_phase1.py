@@ -217,7 +217,7 @@ SOFT_SKILLS_TO_PRESERVE = {
 class TestPhase1Baseline:
     """Test Phase 1 baseline metrics for Issue #191."""
 
-    @pytest.fixture
+    @pytest.fixture(scope="session")
     def preprocessor(self):
         """Initialize preprocessor."""
         return Preprocessor("en_core_web_md")

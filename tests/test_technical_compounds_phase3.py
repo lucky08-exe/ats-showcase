@@ -18,7 +18,7 @@ from src.tokenization.preprocessor import Preprocessor
 class TestPreprocessorIntegration:
     """Test technical compound reclassification in preprocessor."""
 
-    @pytest.fixture
+    @pytest.fixture(scope="session")
     def preprocessor(self):
         """Initialize preprocessor."""
         return Preprocessor("en_core_web_md")

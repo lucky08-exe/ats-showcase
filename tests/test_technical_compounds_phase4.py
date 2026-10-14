@@ -122,7 +122,7 @@ class TestCompoundDetectionAccuracy:
 class TestMetricsImprovement:
     """Test metrics improvement from Phase 4."""
 
-    @pytest.fixture
+    @pytest.fixture(scope="session")
     def preprocessor(self):
         """Initialize preprocessor."""
         return Preprocessor("en_core_web_md")
@@ -213,7 +213,7 @@ Technologies: Python, Docker, Kubernetes, REST API.
 class TestEdgeCases:
     """Test edge cases and boundary conditions."""
 
-    @pytest.fixture
+    @pytest.fixture(scope="session")
     def preprocessor(self):
         """Initialize preprocessor."""
         return Preprocessor("en_core_web_md")

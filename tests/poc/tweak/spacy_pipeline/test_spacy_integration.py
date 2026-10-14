@@ -21,7 +21,7 @@ from src.poc.tweak.spacy_pipeline import (
 class TestSpaCyFactoryRegistration:
     """Test spaCy factory registration of pipeline components."""
 
-    @pytest.fixture
+    @pytest.fixture(scope="session")
     def spacy_module(self):
         """Import spacy (skip test if not available)."""
         try:
@@ -31,7 +31,7 @@ class TestSpaCyFactoryRegistration:
         except ImportError:
             pytest.skip("spaCy not installed")
 
-    @pytest.fixture
+    @pytest.fixture(scope="session")
     def nlp(self, spacy_module):
         """Load spaCy model (skip if not available)."""
         try:
@@ -63,7 +63,7 @@ class TestSpaCyFactoryRegistration:
 class TestComponentNamesRegistered:
     """Test that component names are correctly registered."""
 
-    @pytest.fixture
+    @pytest.fixture(scope="session")
     def spacy_module(self):
         """Import spacy (skip test if not available)."""
         try:
@@ -73,7 +73,7 @@ class TestComponentNamesRegistered:
         except ImportError:
             pytest.skip("spaCy not installed")
 
-    @pytest.fixture
+    @pytest.fixture(scope="session")
     def nlp(self, spacy_module):
         """Load spaCy model (skip if not available)."""
         try:
@@ -104,7 +104,7 @@ class TestComponentNamesRegistered:
 class TestComponentChaining:
     """Test chaining components together (HTML → preprocess → convert → polish)."""
 
-    @pytest.fixture
+    @pytest.fixture(scope="session")
     def spacy_module(self):
         """Import spacy (skip test if not available)."""
         try:
@@ -114,7 +114,7 @@ class TestComponentChaining:
         except ImportError:
             pytest.skip("spaCy not installed")
 
-    @pytest.fixture
+    @pytest.fixture(scope="session")
     def nlp(self, spacy_module):
         """Load spaCy model (skip if not available)."""
         try:
@@ -178,7 +178,7 @@ class TestComponentChaining:
 class TestComponentProperties:
     """Test component properties are accessible."""
 
-    @pytest.fixture
+    @pytest.fixture(scope="session")
     def spacy_module(self):
         """Import spacy (skip test if not available)."""
         try:
@@ -188,7 +188,7 @@ class TestComponentProperties:
         except ImportError:
             pytest.skip("spaCy not installed")
 
-    @pytest.fixture
+    @pytest.fixture(scope="session")
     def nlp(self, spacy_module):
         """Load spaCy model (skip if not available)."""
         try:

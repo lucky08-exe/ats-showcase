@@ -269,7 +269,7 @@ class TestTechnicalCompoundsHelper:
 class TestPreprocessorIntegration:
     """Test integration with preprocessor."""
 
-    @pytest.fixture
+    @pytest.fixture(scope="session")
     def preprocessor(self):
         """Initialize preprocessor."""
         return Preprocessor("en_core_web_md")
@@ -501,10 +501,16 @@ class TestQualityMetrics:
 # ============================================================================
 
 
+@pytest.fixture(scope="session")
+def md_preprocessor():
+    """Shared Preprocessor (en_core_web_md) loaded once per session."""
+    return Preprocessor("en_core_web_md")
+
+
 class TestComprehensiveSummary:
     """Final comprehensive validation."""
 
-    def test_all_phases_integrated(self):
+    def test_all_phases_integrated(self, md_preprocessor):
         """Verify all 5 phases are integrated."""
         # Phase 1: Baseline
         assert len(get_technical_compounds()) > 50, "Phase 1: Patterns missing"
@@ -515,7 +521,7 @@ class TestComprehensiveSummary:
         assert callable(reclassify_compound), "Phase 2: reclassify_compound"
 
         # Phase 3: Integration
-        preprocessor = Preprocessor("en_core_web_md")
+        preprocessor = md_preprocessor
         skills, tech, req = preprocessor.extract_entities("software development")
         # Should work without error
         assert isinstance(skills, (list, tuple)), "Phase 3: Integration broken"
