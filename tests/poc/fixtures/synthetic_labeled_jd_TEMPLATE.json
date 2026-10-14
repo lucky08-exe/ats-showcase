@@ -1,0 +1,24 @@
+[
+  {
+    "id": "synthetic-01",
+    "source_note": "SYNTHETIC: invented sentence for format demonstration; not from any real posting or company.",
+    "text": "SYNTHETIC EXAMPLE. Build internal reporting dashboards in Python and PostgreSQL. Mentor analysts on data modeling.",
+    "expected_skills": [
+      "build internal reporting dashboards",
+      "mentor analysts"
+    ],
+    "expected_technologies": [
+      "postgresql",
+      "python"
+    ]
+  },
+  {
+    "id": "synthetic-02",
+    "source_note": "SYNTHETIC: invented negated list for format demonstration; not from any real posting or company.",
+    "text": "SYNTHETIC EXAMPLE. No experience with Haskell or Erlang required. Experience with Docker is a plus.",
+    "expected_skills": [],
+    "expected_technologies": [
+      "docker"
+    ]
+  }
+]
