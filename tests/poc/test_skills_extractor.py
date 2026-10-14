@@ -697,3 +697,54 @@ class TestSkillExtractorParticiples:
     def test_participle_without_following_noun_unchanged(self, extractor):
         """A participle-led run needs a noun after it: 'Use distributed systems' stays a no-match."""
         assert extractor.extract("Use distributed systems across the stack") == []
+
+
+class TestSkillExtractorGluedCompounds:
+    """Glued hyphen compounds with a function word or participle inside (#556).
+
+    spaCy splits "state-of-the-art" and "end-to-end" into noun, ADP, and DET tokens
+    joined by "-", so the noun run stopped at the preposition. "data-driven" puts a
+    VERB participle (dep amod) after the hyphen; a glued participle is not a skill
+    verb, so it no longer starts a match ("driven platform"). A compound without a
+    skill verb ahead of it is not a skill, so it still yields no span.
+    """
+
+    def test_state_of_the_art_kept_whole(self, extractor):
+        """ADP + DET inside a glued compound stay in the noun run."""
+        assert extractor.extract("You will build state-of-the-art systems.") == ["build state-of-the-art systems"]
+
+    def test_end_to_end_kept_whole(self, extractor):
+        """A single ADP between two glued hyphens stays in the noun run."""
+        assert extractor.extract("You will build end-to-end pipelines.") == ["build end-to-end pipelines"]
+
+    def test_adp_compound_in_second_conjunct(self, extractor):
+        """Glued ADP compounds in both verb conjuncts keep their full spans."""
+        text = "You will design state-of-the-art systems and develop end-to-end platforms."
+        assert extractor.extract(text) == ["design state-of-the-art systems", "develop end-to-end platforms"]
+
+    def test_machine_to_machine_kept_whole(self, extractor):
+        """Same ADP shape with a different preposition."""
+        assert extractor.extract("Develop machine-to-machine protocols.") == ["develop machine-to-machine protocols"]
+
+    def test_participle_glued_compound_kept_whole(self, extractor):
+        """'data-driven' (VERB amod after a glued hyphen) joins the head's noun run."""
+        assert extractor.extract("You will design data-driven platforms.") == ["design data-driven platforms"]
+
+    def test_participle_glued_compound_in_conjunct(self, extractor):
+        """A participle compound after 'and' joins the coordinated span (#509 chain)."""
+        text = "Build end-to-end ML pipelines and data-driven platforms."
+        assert extractor.extract(text) == ["build end-to-end ml pipelines and data-driven platforms"]
+
+    def test_glued_participle_is_not_a_head_verb(self, extractor):
+        """'driven' after a glued hyphen is not a skill verb: no 'driven platform' span."""
+        assert extractor.extract("data-driven platform") == []
+        assert extractor.extract("Work with data-driven teams.") == []
+
+    def test_compound_without_skill_verb_unchanged(self, extractor):
+        """No verb ahead of 'state-of-the-art': the generic phrase is not extracted."""
+        assert extractor.extract("state-of-the-art") == []
+        assert extractor.extract("Experience with state-of-the-art techniques is a plus.") == []
+
+    def test_spaced_dash_still_ends_span_with_adp(self, extractor):
+        """Spaced dashes are punctuation even when a function word sits between them."""
+        assert extractor.extract("You will design systems - to - end tools.") == ["design systems"]
