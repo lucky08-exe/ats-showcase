@@ -54,6 +54,8 @@ _NEGATION_CUES = frozenset({"no", "not", "without", "never", "lacking", "nor", "
 _CONTRAST_RESET = frozenset({"but", "however", "though", "yet"})
 # Clause separators that also end a negation scope (list joiners are handled separately).
 _CLAUSE_STOPS = frozenset({";", ":"})
+# "not only" / "not just" ("not merely") are affirmative idioms, not negation cues (#516).
+_NOT_ONLY_NEXT = frozenset({"only", "just"})
 # Multi-word TECH terms that also emit their first token as its own term (#504).
 # "PyTorch Lightning" yields "pytorch lightning" plus "pytorch" (as before this term
 # existed), but never a standalone "lightning": the longer match wins the overlap.
@@ -103,46 +105,81 @@ def _sentence_bounds(doc, ent):
     return sent.start, sent.end
 
 
-def _has_negation_cue(doc, ent, tech_tokens):
-    """Scan outward from ent (both directions, same sentence) for a negation cue.
-
-    The scan stops at a negation cue (negated, unless a contrast word was crossed
-    first), or at a contrast word, list joiner, clause separator, or another TECH
-    token (no negation found in that direction).
-    """
-    lo, hi = _sentence_bounds(doc, ent)
-    for indices in (range(ent.start - 1, lo - 1, -1), range(ent.end, hi)):
-        for i in indices:
-            lower = doc[i].lower_
-            if lower in _NEGATION_CUES:
-                return True
-            if lower in _CONTRAST_RESET or lower in _LIST_JOINERS or lower in _CLAUSE_STOPS or i in tech_tokens:
-                break
+def _scan_for_cue(doc, indices, tech_tokens):
+    """True when a negation cue is found scanning `indices` before any scope-ending token."""
+    for i in indices:
+        lower = doc[i].lower_
+        if lower == "not" and i + 1 < len(doc) and doc[i + 1].lower_ in _NOT_ONLY_NEXT:
+            continue  # "not only" / "not just" (#516)
+        if lower in _NEGATION_CUES:
+            return True
+        if lower in _CONTRAST_RESET or lower in _LIST_JOINERS or lower in _CLAUSE_STOPS or i in tech_tokens:
+            break
     return False
 
 
-def _list_joined(doc, a, b):
-    """True when a and b are adjacent or separated only by list joiners (e.g. ", or" in a serial list)."""
+def _direct_cues(doc, ent, tech_tokens):
+    """(cue_left, cue_right): whether a negation cue directly governs ent from each side.
+
+    Scans outward from ent within its sentence. A cue scan stops at a contrast word,
+    list joiner, clause separator, or another TECH token (no cue in that direction).
+    """
+    lo, hi = _sentence_bounds(doc, ent)
+    return (
+        _scan_for_cue(doc, range(ent.start - 1, lo - 1, -1), tech_tokens),
+        _scan_for_cue(doc, range(ent.end, hi), tech_tokens),
+    )
+
+
+def _list_gap(doc, a, b):
+    """Lower-cased joiner tokens between adjacent list items a and b; None when they are not a list."""
     if a.start < b.end and b.start < a.end:
         # Overlapping spans (compound and its head term, #504) are not a list.
-        return False
+        return None
     left, right = (a, b) if a.end <= b.start else (b, a)
     gap = doc[left.end : right.start]
-    return len(gap) <= 2 and all(tok.lower_ in _LIST_JOINERS for tok in gap)
+    if len(gap) <= 2 and all(tok.lower_ in _LIST_JOINERS for tok in gap):
+        return [tok.lower_ for tok in gap]
+    return None
+
+
+def _propagation_blocked(source_cues, source_is_left, gap):
+    """Block list propagation that a directly-cued item's cue should not reach (#516).
+
+    - Rightward, cue on the left: "Docker, no Kubernetes, and Redis" ends the cue's scope
+      at ", and" (Redis is a new affirmed item).
+    - Leftward, cue on the right: "Python, Kubernetes is not required" ends the scope at a
+      bare comma (Python is not part of the negated item). "Kubernetes and Docker are not
+      required" still propagates across "and".
+    Only items cued from one side are blocked; items reached via propagation are not.
+    """
+    cue_left, cue_right = source_cues
+    if source_is_left:
+        return cue_left and not cue_right and "," in gap and ("and" in gap or "&" in gap)
+    return cue_right and not cue_left and bool(gap) and all(tok == "," for tok in gap)
 
 
 def _negated_flags(doc, candidates, tech_tokens):
-    """Per-candidate negation flags; negation propagates across list joiners (#497)."""
-    negated = [_has_negation_cue(doc, ent, tech_tokens) for ent in candidates]
+    """Per-candidate negation flags; negation propagates across list joiners (#497, #516)."""
+    cues = [_direct_cues(doc, ent, tech_tokens) for ent in candidates]
+    negated = [left or right for left, right in cues]
     changed = True
     while changed:
         changed = False
         for i, ent in enumerate(candidates):
-            if not negated[i] and any(
-                negated[j] and _list_joined(doc, ent, other) for j, other in enumerate(candidates) if j != i
-            ):
+            if negated[i]:
+                continue
+            for j, other in enumerate(candidates):
+                if j == i or not negated[j]:
+                    continue
+                gap = _list_gap(doc, ent, other)
+                if gap is None:
+                    continue
+                if _propagation_blocked(cues[j], other.end <= ent.start, gap):
+                    continue
                 negated[i] = True
                 changed = True
+                break
     return negated
 
 
