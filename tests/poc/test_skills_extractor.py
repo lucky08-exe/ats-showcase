@@ -917,6 +917,26 @@ class TestSkillExtractorAdjectiveListComma:
         assert extractor.extract("Experience with Python, Java and Kubernetes.") == []
         assert extractor.extract("No Kubernetes, and Redis.") == []
 
+    def test_adjective_list_after_conjunction_conjunct(self, extractor):
+        """A bare-comma adjective list after a 'and' conjunct stays in the span (#557)."""
+        assert extractor.extract("You will design APIs and fault-tolerant, low-latency services.") == [
+            "design apis and fault-tolerant, low-latency services"
+        ]
+
+    def test_adjective_list_stops_at_second_noun_conjunct(self, extractor):
+        """The list ends at its first plain noun head; a later noun conjunct is not absorbed (#557)."""
+        assert extractor.extract("You will design fault-tolerant, low-latency services, scalable platforms.") == [
+            "design fault-tolerant, low-latency services"
+        ]
+
+    def test_empty_input_no_match(self, extractor):
+        """Empty input yields no skills."""
+        assert extractor.extract("") == []
+
+    def test_trailing_comma_after_adjective_keeps_head(self, extractor):
+        """A trailing comma with no following segment keeps only the head (#557)."""
+        assert extractor.extract("You will design fault-tolerant,") == ["design fault-tolerant"]
+
 
 class TestSkillExtractorParticipialWith:
     """Past-tense/participle "built with <tech>" names a stack, not a skill (#551).
