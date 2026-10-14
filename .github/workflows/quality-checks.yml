@@ -13,6 +13,9 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.11", "3.12"]
+    # UV_PYTHON overrides .python-version (pinned to 3.12) so every uv call uses the matrix interpreter.
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
 
     steps:
       - uses: actions/checkout@v4
@@ -30,7 +33,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies with uv
-        run: uv sync --all-extras
+        run: uv sync --all-extras && uv run python --version
 
       - name: Download spaCy model
         run: uv run python -m spacy download en_core_web_md
