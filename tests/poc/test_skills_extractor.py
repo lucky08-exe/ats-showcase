@@ -879,6 +879,14 @@ class TestSkillExtractorAdjectiveListComma:
         """A noun before the comma is a noun conjunct: the span stops at the comma (#509)."""
         assert extractor.extract("You will design systems, low-latency platforms.") == ["design systems"]
 
+    def test_noun_conjunct_then_adjective_list_keeps_head(self, extractor):
+        """A later comma after a noun conjunct does not open an adjective list (#557)."""
+        assert extractor.extract("You will design systems, fast, reliable services.") == ["design systems"]
+
+    def test_noun_conjunct_then_adjective_pair_keeps_head(self, extractor):
+        """'design systems, scalable, reliable platforms' keeps only the head (#557)."""
+        assert extractor.extract("You will design systems, scalable, reliable platforms.") == ["design systems"]
+
     def test_noun_before_comma_with_adjective_pair_unchanged(self, extractor):
         """'design systems, scalable and resilient' keeps the existing tentative-comma result."""
         assert extractor.extract("You will design systems, scalable and resilient.") == [

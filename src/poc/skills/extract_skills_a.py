@@ -302,8 +302,9 @@ def _coordinated_end(doc: Doc, head_end: int) -> int:
             # ", and X" / ", or X" commits; a bare ", X" is tentative.
             after_comma = cursor + 1
             commits = after_comma < len(doc) and _is_join_conjunction(doc[after_comma])
-            if not commits:
-                # Bare comma between premodifiers of one head (#557), not a noun conjunct.
+            if not commits and cursor == head_end:
+                # Bare comma directly after the head, between premodifiers of one head (#557).
+                # Later bare commas are noun-conjunct punctuation (#509), not a new list.
                 list_end = _adjective_list_end(doc, cursor)
                 if list_end is not None:
                     committed = list_end
