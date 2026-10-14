@@ -53,7 +53,7 @@
       ]
     },
     "builder": {
-      "model": "claude-haiku-4-5-20251001",
+      "model": "claude-haiku-4-5",
       "name": "Builder/Implementer",
       "tools": {
         "allowed": [
@@ -105,7 +105,7 @@
       ]
     },
     "reviewer": {
-      "model": "claude-haiku-4-5-20251001",
+      "model": "claude-haiku-4-5",
       "name": "Reviewer/Tester",
       "tools": {
         "allowed": [
