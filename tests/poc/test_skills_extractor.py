@@ -266,8 +266,9 @@ class TestSkillExtractorEdgeCases:
         """Keeps the full hyphenated span (#508); no truncation at the hyphen."""
         text = "You will design high-performance distributed systems."
         skills = extractor.extract(text)
-        # "distributed" is tagged VERB by the parser, so the run ends at the hyphen join.
-        assert skills == ["design high-performance"]
+        # Deliberate #508 pin updated in #523: "distributed" is tagged VERB (amod) by the
+        # parser; it now joins the run, so the full span is kept.
+        assert skills == ["design high-performance distributed systems"]
 
     def test_parenthetical_context(self, extractor):
         """Handles skill in parenthetical context."""
@@ -542,7 +543,9 @@ class TestSkillExtractorCoordination:
 
     def test_508_hyphen_regression(self, extractor):
         """#508 regression: hyphenated head and hyphenated 'and' conjunct."""
-        assert extractor.extract("You will design high-performance distributed systems.") == ["design high-performance"]
+        assert extractor.extract("You will design high-performance distributed systems.") == [
+            "design high-performance distributed systems"
+        ]
         assert extractor.extract("Design high-performance systems and platforms.") == [
             "design high-performance systems and platforms"
         ]
@@ -641,3 +644,56 @@ class TestSkillExtractorVerbTaggedNoun:
             "develop platforms",
         ]
         assert extractor.extract("You will lead data or ML teams.") == ["lead data or ml teams"]
+
+
+class TestSkillExtractorParticiples:
+    """VERB participles (VBN/VBG, dep amod) inside a skill noun run (#523).
+
+    spaCy tags "distributed" in "design high-performance distributed systems" as
+    VERB (amod), which used to end the noun run at "performance". A participle that
+    modifies the following noun is part of the run when a noun follows it. A
+    participle with no noun after it, an ADJ modifier ("distributed systems" after
+    "We build and deploy") and a participle used as a clause (dep acl) are unchanged.
+    """
+
+    def test_participle_completes_hyphen_run(self, extractor):
+        """'distributed' (VERB amod) joins the hyphenated run: the full span is kept."""
+        assert extractor.extract("design high-performance distributed systems") == [
+            "design high-performance distributed systems"
+        ]
+
+    def test_participle_completes_run_in_sentence(self, extractor):
+        """Same span inside a sentence; the #508 pin for this sentence is updated (#523)."""
+        assert extractor.extract("You will design high-performance distributed systems.") == [
+            "design high-performance distributed systems"
+        ]
+
+    def test_participle_completes_run_in_conjunct(self, extractor):
+        """A participle inside a verb conjunct's run is kept in the conjunct span."""
+        assert extractor.extract("Build and deploy high-performance distributed systems") == [
+            "deploy high-performance distributed systems"
+        ]
+
+    def test_adj_modifier_before_noun_unchanged(self, extractor):
+        """'distributed' tagged ADJ (dep amod) after 'We build and deploy' is unchanged."""
+        assert extractor.extract("We build and deploy distributed systems") == ["deploy distributed systems"]
+
+    def test_participle_used_as_clause_not_absorbed(self, extractor):
+        """'used' (dep acl, no noun object in the run) does not extend the span."""
+        assert extractor.extract("Design high-performance systems used internally by customers") == [
+            "design high-performance systems"
+        ]
+
+    def test_participle_before_verb_conjunct_not_absorbed(self, extractor):
+        """A verb conjunct after 'and' is not extended by a following participle.
+
+        Known gap (not fixed in #523): 'develop distributed platforms' gives no
+        span because a verb head cannot start with a participle; the head span is kept.
+        """
+        assert extractor.extract("Design high-performance systems and develop distributed platforms") == [
+            "design high-performance systems",
+        ]
+
+    def test_participle_without_following_noun_unchanged(self, extractor):
+        """A participle-led run needs a noun after it: 'Use distributed systems' stays a no-match."""
+        assert extractor.extract("Use distributed systems across the stack") == []

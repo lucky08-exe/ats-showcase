@@ -103,13 +103,29 @@ def _verb_start_end(doc: Doc, start: int) -> int | None:
     return _noun_run_end(doc, obj)
 
 
+# --- Participle inside a noun run (#523) ----------------------------------------
+#
+# spaCy tags a participle that modifies a noun as VERB (dep amod), e.g. "distributed"
+# in "design high-performance distributed systems". Such a token is part of the run
+# when a noun-run token follows it. It is not a run start on its own (no noun in front
+# of it) and a trailing participle is not absorbed. Other participles keep their
+# tags: "We build and deploy distributed systems" tags "distributed" ADJ, and a
+# participle with dep acl ("systems used internally") is a clause, not a modifier.
+
+
+def _is_amod_participle(tok: Token) -> bool:
+    """True for a VBN/VBG token tagged VERB that modifies the following noun (dep amod)."""
+    return tok.pos_ == "VERB" and tok.tag_ in ("VBN", "VBG") and tok.dep_ == "amod"
+
+
 def _noun_run_end(doc: Doc, start: int) -> int | None:
     """End (exclusive) of a noun run starting at ``start``, or None.
 
-    The run is maximal over _NOUN_RUN_POS tokens and may contain one glued
-    hyphen join ("high-performance"). Spaced dashes end the run.
+    The run is maximal over _NOUN_RUN_POS tokens and amod participles that precede
+    a noun (see _run_end) and may contain one glued hyphen join ("high-performance").
+    Spaced dashes end the run.
     """
-    if start >= len(doc) or doc[start].pos_ not in _NOUN_RUN_POS:
+    if start >= len(doc) or not _starts_noun_run(doc, start):
         return None
     end = _run_end(doc, start)
     if end < len(doc) and doc[end].text == "-" and not _is_spaced_dash(doc[end]):
@@ -129,12 +145,39 @@ def _conjunct_end(doc: Doc, start: int) -> int | None:
     return _noun_run_end(doc, start)
 
 
+def _starts_noun_run(doc: Doc, start: int) -> bool:
+    """True if a noun run can begin at ``start``: a noun-run token, or an amod participle before a noun."""
+    if doc[start].pos_ in _NOUN_RUN_POS:
+        return True
+    return _is_amod_participle(doc[start]) and start + 1 < len(doc) and doc[start + 1].pos_ in _NOUN_RUN_POS
+
+
 def _run_end(doc: Doc, start: int) -> int:
-    """Index just past the contiguous _NOUN_RUN_POS tokens starting at ``start``."""
+    """Index just past the contiguous run tokens starting at ``start`` (#523).
+
+    Run tokens are _NOUN_RUN_POS tokens and amod participles that are followed by a
+    noun-run token. A trailing participle is not part of the run.
+    """
     end = start
-    while end < len(doc) and doc[end].pos_ in _NOUN_RUN_POS:
-        end += 1
+    while end < len(doc):
+        if doc[end].pos_ in _NOUN_RUN_POS:
+            end += 1
+        elif _is_amod_participle(doc[end]) and end + 1 < len(doc) and doc[end + 1].pos_ in _NOUN_RUN_POS:
+            end += 1
+        else:
+            break
     return end
+
+
+def _participle_head_end(doc: Doc, head_end: int) -> int:
+    """Extend a matched head across an amod participle that continues its noun run (#523).
+
+    "design high-performance" + "distributed systems" -> the run through "systems".
+    Returns ``head_end`` unchanged when the token there does not continue the run.
+    """
+    if head_end < len(doc) and _is_amod_participle(doc[head_end]) and _starts_noun_run(doc, head_end):
+        return _run_end(doc, head_end)
+    return head_end
 
 
 def _is_join_conjunction(tok: Token) -> bool:
@@ -236,7 +279,7 @@ class SkillExtractor:
             matches = [m for m in matches if not _has_spaced_dash(m)]
             # Extend each head through its coordinated conjuncts (#509). The extended
             # span contains the head, so filter_spans keeps it over the bare head.
-            extended = [doc[m.start : _coordinated_end(doc, m.end)] for m in matches]
+            extended = [doc[m.start : _coordinated_end(doc, _participle_head_end(doc, m.end))] for m in matches]
 
             # 4. Best Practice: Filter Overlaps
             # If the matcher finds "design architectures" and "design deep learning architectures",
