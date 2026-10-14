@@ -39,6 +39,9 @@ Multi-agent coordination framework for ATS Playground: role boundaries + escalat
 | **Architect** | claude-sonnet-5 | Deep planning | `.claude/agents/architect.md` |
 | **Builder** | claude-haiku-4-5 | Synthesis | `.claude/agents/builder.md` |
 | **Reviewer** | claude-haiku-4-5 | Code review | `.claude/agents/reviewer.md` |
+| **Slop Hunter** | claude-sonnet-5 | Dead-code triage (report only) | `.claude/agents/slop-hunter.md` |
+| **Cleanup Builder** | claude-haiku-4-5 | Approved ≤2-file cleanup | `.claude/agents/cavecrew-builder.md` |
+| **Cleanup Reviewer** | claude-haiku-4-5 | Blast-radius gatekeeper (max 4 loops) | `.claude/agents/cavecrew-reviewer.md` |
 | *Default* | haiku-4-5 | (all others) | `.claude/settings.json` |
 
 **Precedence:** Agent `.md` frontmatter > Global settings.json

@@ -6,11 +6,37 @@
       "model": "claude-sonnet-5",
       "name": "Architect/Planner",
       "tools": {
-        "allowed": ["Read", "Write", "Edit"],
-        "denied": ["Bash(*)"],
+        "allowed": [
+          "Read",
+          "Write",
+          "Grep",
+          "Glob",
+          "Bash(gh issue create)",
+          "Bash(gh issue list)",
+          "Bash(gh issue comment)",
+          "Bash(graphify query *)",
+          "Bash(graphify path *)",
+          "Bash(graphify explain *)",
+          "Bash(code-review-graph query *)",
+          "Bash(code-review-graph impact *)",
+          "Bash(code-review-graph architecture)"
+        ],
+        "denied": [
+          "Bash(rm *)",
+          "Bash(git push *)"
+        ],
         "patterns": {
-          "read": ["CLAUDE.md", "AGENTS.md", "tasks.md", "DESIGN.md", ".claude/**"],
-          "write": ["tasks.md", "docs/**", ".claude/rules/**"],
+          "read": [
+            "CLAUDE.md",
+            "AGENTS.md",
+            "tasks.md",
+            "DESIGN.md",
+            ".claude/**"
+          ],
+          "write": [
+            "tasks.md",
+            "docs/**"
+          ],
           "edit": []
         }
       },
@@ -21,22 +47,48 @@
         "Define phase coordination (multi-agent.md)"
       ],
       "constraints": [
-        "NEVER: Write production code (src/)",
+        "NEVER: Write production code (src/, tests/)",
         "NEVER: Modify CLAUDE.md, AGENTS.md without human review",
         "ALWAYS: Gate 1 approval before cross-file changes"
       ]
     },
     "builder": {
-      "model": "claude-haiku-4-5-20251001",
+      "model": "claude-haiku-4-5",
       "name": "Builder/Implementer",
       "tools": {
-        "allowed": ["Read", "Write", "Edit", "Bash(uv *)", "Bash(pytest *)"],
-        "denied": ["Bash(rm -rf *)", "Bash(git reset *)", "Bash(git push --force *)"],
+        "allowed": [
+          "Read",
+          "Write",
+          "Edit",
+          "Bash(uv *)",
+          "Bash(pytest *)"
+        ],
+        "denied": [
+          "Bash(rm -rf *)",
+          "Bash(git reset *)",
+          "Bash(git push --force *)"
+        ],
         "patterns": {
-          "read": ["src/**", "tests/**", ".claude/rules/**"],
-          "write": ["src/**", "tests/**"],
-          "edit": ["src/**", "tests/**"],
-          "bash": ["uv sync", "uv run", "pytest", "ruff", "black"]
+          "read": [
+            "src/**",
+            "tests/**",
+            ".claude/rules/**"
+          ],
+          "write": [
+            "src/**",
+            "tests/**"
+          ],
+          "edit": [
+            "src/**",
+            "tests/**"
+          ],
+          "bash": [
+            "uv sync",
+            "uv run",
+            "pytest",
+            "ruff",
+            "black"
+          ]
         }
       },
       "responsibilities": [
@@ -53,14 +105,34 @@
       ]
     },
     "reviewer": {
-      "model": "claude-haiku-4-5-20251001",
+      "model": "claude-haiku-4-5",
       "name": "Reviewer/Tester",
       "tools": {
-        "allowed": ["Read", "Bash(pytest *)", "Bash(ruff *)", "Bash(grep *)"],
-        "denied": ["Write", "Edit", "Bash(rm *)", "Bash(git push *)"],
+        "allowed": [
+          "Read",
+          "Bash(pytest *)",
+          "Bash(ruff *)",
+          "Bash(grep *)"
+        ],
+        "denied": [
+          "Write",
+          "Edit",
+          "Bash(rm *)",
+          "Bash(git push *)"
+        ],
         "patterns": {
-          "read": ["**"],
-          "bash": ["pytest", "ruff", "black", "mypy", "grep", "find", "ls"]
+          "read": [
+            "**"
+          ],
+          "bash": [
+            "pytest",
+            "ruff",
+            "black",
+            "mypy",
+            "grep",
+            "find",
+            "ls"
+          ]
         }
       },
       "responsibilities": [
@@ -73,6 +145,116 @@
         "NEVER: Modify production code or merge without human approval",
         "ALWAYS: Use actual tool output (not predictions) for verification",
         "ALWAYS: Test coverage > 80% for new code"
+      ]
+    },
+    "slop-hunter": {
+      "model": "claude-sonnet-5",
+      "name": "Dead Code & Doc Slop Hunter",
+      "tools": {
+        "allowed": [
+          "Read",
+          "Grep",
+          "Glob",
+          "Bash(code-review-graph dead-code)",
+          "Bash(code-review-graph query *)",
+          "Bash(code-review-graph impact *)",
+          "Bash(code-review-graph large-functions)",
+          "Bash(graphify query *)",
+          "Bash(graphify path *)",
+          "Bash(graphify explain *)",
+          "Bash(gh issue create)",
+          "Bash(gh issue list)"
+        ],
+        "denied": [
+          "Write",
+          "Edit"
+        ]
+      },
+      "responsibilities": [
+        "Find unreferenced code via code-review-graph dead-code",
+        "Flag stale commented-out blocks",
+        "Propose 1-2 file sub-issues, one at a time"
+      ],
+      "constraints": [
+        "NEVER: Edit files (report only)",
+        "ALWAYS: Respect dead-code exclusions in slop-hunter.md"
+      ]
+    },
+    "cavecrew-builder": {
+      "model": "claude-haiku-4-5",
+      "name": "Cleanup Builder",
+      "tools": {
+        "allowed": [
+          "Read",
+          "Edit",
+          "Grep",
+          "Glob",
+          "Bash(git diff *)",
+          "Bash(git status)",
+          "Bash(uv run pytest *)",
+          "Bash(uv run ruff *)",
+          "Bash(uv run mypy *)",
+          "Bash(bash .claude/scripts/run-local-ci.sh *)"
+        ],
+        "denied": [
+          "Bash(rm -rf *)",
+          "Bash(git reset --hard*)",
+          "Bash(git push --force*)"
+        ],
+        "patterns": {
+          "edit": [
+            "src/**",
+            "tests/**",
+            "docs/**"
+          ],
+          "deny": [
+            "AGENTS.md",
+            "CLAUDE.md",
+            ".claude/agents/**",
+            ".claude/rules/**",
+            ".claude/skills/**",
+            ".claude/settings.json",
+            "tasks.md"
+          ]
+        }
+      },
+      "responsibilities": [
+        "Apply approved single-issue dead-code cleanup",
+        "Run local CI with tests before reporting done"
+      ],
+      "constraints": [
+        "NEVER: Modify more than 2 files per execution",
+        "NEVER: Modify tasks.md, CLAUDE.md, AGENTS.md, .claude/**"
+      ]
+    },
+    "cavecrew-reviewer": {
+      "model": "claude-haiku-4-5",
+      "name": "Cleanup Reviewer",
+      "tools": {
+        "allowed": [
+          "Read",
+          "Grep",
+          "Bash(git diff *)",
+          "Bash(git status)",
+          "Bash(code-review-graph detect-changes *)",
+          "Bash(code-review-graph impact *)",
+          "Bash(code-review-graph dead-code)",
+          "Bash(uv run ruff *)",
+          "Bash(uv run mypy *)",
+          "Bash(uv run pytest *)"
+        ],
+        "denied": [
+          "Write",
+          "Edit"
+        ]
+      },
+      "responsibilities": [
+        "Blast-radius and orphan checks on cleanup diffs",
+        "Gatekeeper with max 4 review loops"
+      ],
+      "constraints": [
+        "NEVER: Modify production code",
+        "ALWAYS: Escalate to human at loop 4 without convergence"
       ]
     }
   },
@@ -91,50 +273,73 @@
       "ownerRole": "builder",
       "reviewerRole": "reviewer",
       "rules": ".claude/rules/crawl.md",
-      "appliesTo": ["src/browser/**", "src/parsers/**"]
+      "appliesTo": [
+        "src/browser/**",
+        "src/parsers/**"
+      ]
     },
     "preprocess": {
       "ownerRole": "builder",
       "reviewerRole": "reviewer",
       "rules": ".claude/rules/preprocess.md",
-      "appliesTo": ["src/tokenization/**", "src/parsers/**"]
+      "appliesTo": [
+        "src/tokenization/**",
+        "src/parsers/**"
+      ]
     },
     "verify": {
       "ownerRole": "builder",
       "reviewerRole": "reviewer",
       "rules": ".claude/rules/verify.md",
-      "appliesTo": ["src/cli/**"]
+      "appliesTo": [
+        "src/cli/**"
+      ]
     },
     "assess": {
       "ownerRole": "builder",
       "reviewerRole": "reviewer",
       "rules": ".claude/rules/assess.md",
-      "appliesTo": ["src/llm/**", "src/assessment/**"]
+      "appliesTo": [
+        "src/llm/**",
+        "src/assessment/**"
+      ]
     },
     "storage": {
       "ownerRole": "builder",
       "reviewerRole": "reviewer",
       "rules": ".claude/rules/storage.md",
-      "appliesTo": ["src/storage/**"]
+      "appliesTo": [
+        "src/storage/**"
+      ]
     },
     "tui": {
       "ownerRole": "builder",
       "reviewerRole": "reviewer",
       "rules": ".claude/rules/tui/",
-      "appliesTo": ["src/tui/**"]
+      "appliesTo": [
+        "src/tui/**"
+      ]
     },
     "coordination": {
       "ownerRole": "architect",
       "reviewerRole": "human",
       "rules": ".claude/rules/multi-agent.md",
-      "appliesTo": ["tasks.md", ".claude/**"]
+      "appliesTo": [
+        "tasks.md",
+        ".claude/**"
+      ]
     }
   },
   "handoverProtocol": "ARCHITECT → BUILDER → REVIEWER → HUMAN (merge)",
   "gates": {
     "gate1": {
       "stage": "Before implementation",
-      "triggers": ["module interface changes", "config file changes", "CLI changes", "schema migrations"],
+      "triggers": [
+        "module interface changes",
+        "config file changes",
+        "CLI changes",
+        "schema migrations"
+      ],
       "checklist": [
         "Architect drafts tasks.md with API contracts",
         "Architect sketches affected files (list + scope)",
@@ -143,7 +348,9 @@
     },
     "gate2": {
       "stage": "Before merge",
-      "triggers": ["All multi-file changes"],
+      "triggers": [
+        "All multi-file changes"
+      ],
       "checklist": [
         "All tests passing (pytest)",
         "Linter passing (ruff/black)",
