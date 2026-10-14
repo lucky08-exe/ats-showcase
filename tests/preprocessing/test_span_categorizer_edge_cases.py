@@ -581,6 +581,7 @@ class TestPerformanceBenchmark:
             pytest.skip("en_core_web_md not installed")  # type: ignore[no-any-return]
             return  # type: ignore[return-value]
 
+    @pytest.mark.perf
     def test_performance_100token_document_10spans(self, preprocessor: Preprocessor) -> None:
         """Test 100-token document with 10 requirement mentions processes in <50ms."""
         # Create document with multiple requirement mentions
@@ -609,6 +610,7 @@ class TestPerformanceBenchmark:
             f"{len(document.split())} token document in {elapsed_ms:.2f}ms"
         )
 
+    @pytest.mark.perf
     def test_performance_multiple_documents(self, preprocessor: Preprocessor) -> None:
         """Test batch processing multiple documents maintains <50ms per doc."""
         documents = [

@@ -163,6 +163,7 @@ class TestRequirementExtractionIntegration:
         assert len(all_trigger_words) > 0, "Should capture multiple trigger words"
         print(f"Captured trigger words: {sorted(all_trigger_words)}")
 
+    @pytest.mark.perf
     def test_performance_no_regression(self, preprocessor, sample_jobs):
         """Verify requirement extraction adds <50ms overhead per job."""
         # Warm up spaCy pipeline

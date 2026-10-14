@@ -405,6 +405,7 @@ class TestSectionHeaderSynthesis:
 class TestPerformance:
     """Test performance on realistic workloads."""
 
+    @pytest.mark.perf
     def test_100_jobs_under_10_seconds(self) -> None:
         """Cleaning 100 job descriptions completes in reasonable time."""
         import time
