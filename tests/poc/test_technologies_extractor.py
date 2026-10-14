@@ -330,6 +330,17 @@ class TestTechExtractorNegation:
             ("Kubernetes is required; no Java needed.", ["kubernetes"]),
             ("Kubernetes and Docker are not required.", []),
             ("Kubernetes is required but not Docker.", ["kubernetes"]),
+            # 17-18: "not only" / "not just" are affirmative idioms, not negation (#516)
+            ("We run Kubernetes not only in prod but also in staging.", ["kubernetes"]),
+            ("Not only Kubernetes but also Docker is needed.", ["docker", "kubernetes"]),
+            ("We use Kubernetes not just in staging.", ["kubernetes"]),
+            # 19-20: a negated trailing item does not pull in a preceding comma-joined item (#516)
+            ("Python, Kubernetes is not required.", ["python"]),
+            ("We need Docker, no Kubernetes, and Redis experience.", ["docker", "redis"]),
+            # 21-22: propagation still covers conjunction lists and cue-first comma lists (#516 guard)
+            ("Kubernetes, Docker, and Redis are not required.", []),
+            ("No Java, Kubernetes, and Docker experience required.", []),
+            ("Kubernetes, no Docker, and Redis experience.", ["kubernetes", "redis"]),
         ],
     )
     def test_negation_scope(self, extractor, nlp, text, expected):

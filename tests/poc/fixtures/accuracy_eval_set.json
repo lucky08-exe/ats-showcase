@@ -201,5 +201,39 @@
     "text": "Experience with Go-to-market strategy.",
     "expected_skills": [],
     "expected_technologies": []
+  },
+  {
+    "id": "s24",
+    "text": "We run Kubernetes not only in prod but also in staging.",
+    "expected_skills": [],
+    "expected_technologies": [
+      "kubernetes"
+    ]
+  },
+  {
+    "id": "s25",
+    "text": "Not only Kubernetes but also Docker is needed.",
+    "expected_skills": [],
+    "expected_technologies": [
+      "docker",
+      "kubernetes"
+    ]
+  },
+  {
+    "id": "s26",
+    "text": "Python, Kubernetes is not required.",
+    "expected_skills": [],
+    "expected_technologies": [
+      "python"
+    ]
+  },
+  {
+    "id": "s27",
+    "text": "We need Docker, no Kubernetes, and Redis experience.",
+    "expected_skills": [],
+    "expected_technologies": [
+      "docker",
+      "redis"
+    ]
   }
 ]
