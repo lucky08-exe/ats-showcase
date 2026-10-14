@@ -455,7 +455,7 @@ class TestTechExtractorAmbiguousTerms:
         "text,expected",
         [
             ("Built with Go and gRPC.", "go"),
-            ("Spring Boot microservices.", "spring"),
+            ("Spring Boot microservices.", "spring boot"),
             ("Vue.js frontend.", "vue.js"),
         ],
     )
@@ -557,7 +557,7 @@ class TestTechExtractorVocabularyAdditions:
         [
             ("Built with Go and gRPC.", "go"),
             ("Experience with Go services.", "go"),
-            ("Experience with Spring Boot.", "spring"),
+            ("Experience with Spring.", "spring"),
             ("Experience with Vue.js.", "vue.js"),
         ],
     )
@@ -612,3 +612,65 @@ class TestTechExtractorVocabularyAdditions:
         assert "pytorch lightning" in TECH_TERMS
         assert "lightning" in TECH_TERMS
         assert "pytorch lightning" not in AMBIGUOUS_TERMS
+
+
+class TestTechExtractorIssue513:
+    """#513: lightning-specific cues, spring boot compound, hyphen compounds, grpc."""
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Lightning data storms are fun.",
+            "Lightning data storms.",
+        ],
+    )
+    def test_lightning_data_storms_not_extracted(self, extractor, nlp, text):
+        """The shared _NEXT_CUES ('data') must not give lightning tech evidence."""
+        assert "lightning" not in extractor.extract(nlp(text))
+
+    @pytest.mark.parametrize(
+        "text,expected",
+        [
+            ("Lightning trainer settings for the model.", "lightning"),
+            ("Lightning module for training.", "lightning"),
+            ("Experience with Lightning trainer and Kafka.", "lightning"),
+            ("Research novel methods and evaluate them with PyTorch Lightning.", "pytorch lightning"),
+        ],
+    )
+    def test_lightning_tech_cues_extracted(self, extractor, nlp, text, expected):
+        """Positive controls: lightning-specific next cues and the PyTorch Lightning compound."""
+        assert expected in extractor.extract(nlp(text))
+
+    def test_built_with_lightning_sentence_end_extracted(self, extractor, nlp):
+        """'Built with Lightning.' closes a build phrase at sentence end (#513, recall recovery)."""
+        assert "lightning" in extractor.extract(nlp("Built with Lightning."))
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Lightning talks and Kafka meetups.",
+            "Built with lightning-fast storage.",
+        ],
+    )
+    def test_lightning_guard_not_extracted(self, extractor, nlp, text):
+        """Guard against the #513 adjacency and built-with changes (not a failing-before case)."""
+        assert "lightning" not in extractor.extract(nlp(text))
+
+    def test_spring_boot_compound_without_bare_spring(self, extractor, nlp):
+        """#513: 'Spring Boot' is one term (label 'spring boot'); bare 'spring' is not emitted."""
+        techs = extractor.extract(nlp("Experience with Spring Boot and Kafka."))
+        assert "spring boot" in techs
+        assert "spring" not in techs
+
+    def test_go_to_market_not_extracted(self, extractor, nlp):
+        """#513: 'Go' inside the hyphenated English compound 'Go-to-market' is not the language."""
+        assert "go" not in extractor.extract(nlp("Experience with Go-to-market strategy."))
+
+    def test_go_based_still_extracted(self, extractor, nlp):
+        """Positive control: a tech qualifier after the hyphen keeps 'Go' as tech."""
+        assert "go" in extractor.extract(nlp("Experience with Go-based services."))
+
+    def test_grpc_extracted_alongside_go(self, extractor, nlp):
+        """#513: 'gRPC' is a TECH term; 'Built with Go and gRPC.' yields both."""
+        techs = extractor.extract(nlp("Built with Go and gRPC."))
+        assert {"go", "grpc"} <= set(techs)
