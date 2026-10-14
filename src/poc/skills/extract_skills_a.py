@@ -299,8 +299,21 @@ class SkillExtractor:
             {"TAG": {"IN": ["VBN", "VBG"]}, "DEP": "amod"},
             noun_group(),
         ]
+        # Participle-led head (#558): "Design distributed systems" at the start of a sentence.
+        # spaCy tags the sentence-initial imperative NOUN (npadvmod) and the participle VERB
+        # (amod), so no action verb starts a match. The head is a skill-verb lemma tagged NOUN
+        # at a sentence start, followed by a participle modifier and a noun run. The participle
+        # must not itself be a skill verb: "Lead managed services" keeps the participle head.
+        participle_head_pattern = [
+            {"POS": "NOUN", "LEMMA": {"IN": SKILL_VERBS}, "IS_SENT_START": True},
+            {"TAG": {"IN": ["VBN", "VBG"]}, "DEP": "amod", "LEMMA": {"NOT_IN": SKILL_VERBS}},
+            noun_group(),
+        ]
         # Add patterns to matcher
-        self.matcher.add("SKILL_PHRASE", [pattern, hyphen_pattern, hyphen_adp_pattern, hyphen_participle_pattern])
+        self.matcher.add(
+            "SKILL_PHRASE",
+            [pattern, hyphen_pattern, hyphen_adp_pattern, hyphen_participle_pattern, participle_head_pattern],
+        )
 
     def extract(self, text):
         try:

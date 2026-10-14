@@ -748,3 +748,67 @@ class TestSkillExtractorGluedCompounds:
     def test_spaced_dash_still_ends_span_with_adp(self, extractor):
         """Spaced dashes are punctuation even when a function word sits between them."""
         assert extractor.extract("You will design systems - to - end tools.") == ["design systems"]
+
+
+class TestSkillExtractorParticipleLedHead:
+    """A sentence-initial skill verb that spaCy tags NOUN, followed by a participle (#558).
+
+    "Design distributed systems" at the start of a sentence parses as Design (NOUN,
+    npadvmod) + distributed (VERB, amod) + systems, so no action verb starts a match and
+    the span was lost. The head is a skill-verb lemma tagged NOUN at a sentence start,
+    followed by a participle modifier and a noun run. Guards: the head must start the
+    sentence (a mid-sentence verb use is unchanged), the participle must not itself be
+    a skill verb ("Lead managed services" keeps "managed services"), and a following verb
+    conjunct still ends the span.
+    """
+
+    def test_sentence_initial_participle_head_kept(self, extractor):
+        """'Design distributed systems' without a sentence after it gives the full span."""
+        assert extractor.extract("Design distributed systems") == ["design distributed systems"]
+
+    def test_sentence_initial_participle_head_in_sentence(self, extractor):
+        """Same span with a trailing period and a following sentence."""
+        assert extractor.extract("Design distributed systems. Build APIs.") == [
+            "build apis",
+            "design distributed systems",
+        ]
+
+    def test_participle_head_extends_through_purpose_clause(self, extractor):
+        """The span stops at the noun run; 'to scale across regions' is not absorbed."""
+        assert extractor.extract("Design distributed systems to scale across regions.") == [
+            "design distributed systems",
+            "scale across regions",
+        ]
+
+    def test_participle_head_then_verb_conjunct_stops(self, extractor):
+        """A verb conjunct after 'and' is its own match, not merged into the participle head."""
+        assert extractor.extract("Design distributed systems and build APIs.") == [
+            "build apis",
+            "design distributed systems",
+        ]
+
+    def test_participle_head_with_hyphen_run_unchanged(self, extractor):
+        """A head whose run already has a hyphen join is matched as before (#523)."""
+        assert extractor.extract("Design high-performance distributed systems") == [
+            "design high-performance distributed systems"
+        ]
+
+    def test_mid_sentence_participle_verb_use_not_matched(self, extractor):
+        """'designed' after a subject is a past-tense verb, not a participle-led head."""
+        assert extractor.extract("The team designed distributed systems last year.") == []
+
+    def test_gerund_after_preposition_not_matched(self, extractor):
+        """'Experience designing distributed systems' has no NOUN head at a sentence start."""
+        assert extractor.extract("Experience designing distributed systems.") == []
+
+    def test_sentence_initial_participle_verb_not_matched(self, extractor):
+        """'Designed' sentence-initial is tagged VERB (participle), so no head span is made."""
+        assert extractor.extract("Designed distributed systems are key.") == []
+
+    def test_participle_that_is_skill_verb_keeps_existing_span(self, extractor):
+        """'managed' is itself a skill verb, so 'Lead managed services' keeps 'managed services'."""
+        assert extractor.extract("Lead managed services.") == ["managed services"]
+
+    def test_glued_compound_after_head_unchanged(self, extractor):
+        """A function word inside a glued compound after the head is not matched by this pattern."""
+        assert extractor.extract("Design end-to-end distributed systems") == []
