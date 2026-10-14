@@ -31,8 +31,10 @@ TECH_TERMS = {
     "django",
     "flask",
     "spring",
+    "spring boot",  # #513: compound, so "Spring Boot" does not yield bare "spring"
     "tensorflow",
     "sklearn",
+    "grpc",
     # --- Cloud & Infrastructure ---
     "aws",
     "azure",

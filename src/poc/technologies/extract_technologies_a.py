@@ -36,11 +36,16 @@ _NEXT_CUES = frozenset({"boot", "framework", "mvc", "cloud", "data", "security",
 _LIST_JOINERS = frozenset({",", "and", "&", "/", "or"})
 # Terms whose common English meaning ("lightning strike") makes a preceding cue
 # ("with", "experience", "of") too weak to prove tech usage. For these, only a
-# following cue (_NEXT_CUES) or an adjacent TECH term counts as evidence.
-# Accepted limitation: "Built with Lightning." (no next cue, no adjacent TECH) is
-# now not extracted, and a next-cue collision such as "Lightning data storms" still
-# passes because _NEXT_CUES is shared across all ambiguous terms.
+# following cue (_LIGHTNING_NEXT_CUES), a "built with X." sentence end (#513), or an
+# adjacent TECH term counts as evidence.
 _PREV_CUE_INSUFFICIENT = frozenset({"lightning"})
+# Next cues specific to lightning (#513). The shared _NEXT_CUES ("data", "cloud", ...)
+# collide with the common English phrase ("Lightning data storms").
+_LIGHTNING_NEXT_CUES = frozenset({"trainer", "module", "fabric", "datamodule", "callback", "callbacks"})
+_SENTENCE_END = frozenset({".", "!", "?"})
+# A hyphen after an ambiguous term joins an English compound ("Go-to-market", "Go-live")
+# unless the next word is a tech qualifier ("Go-based services").
+_HYPHEN_TECH_SUFFIXES = frozenset({"based", "native", "lang", "like"})
 # Negation (#497). spaCy splits "don't"/"doesn't" into "do" + "n't", so "n't" is
 # listed explicitly. "nice to have" is deliberately NOT a cue (optional, not absent).
 _NEGATION_CUES = frozenset({"no", "not", "without", "never", "lacking", "nor", "n't"})
@@ -55,15 +60,30 @@ _CLAUSE_STOPS = frozenset({";", ":"})
 _COMPOUND_HEADS = {"pytorch lightning": "pytorch"}
 
 
+def _is_built_with_final(doc, ent):
+    """Lightning closes a 'built with' phrase at sentence end, as in 'Built with Lightning.' (#513)."""
+    if ent.start < 2 or doc[ent.start - 2].lower_ != "built" or doc[ent.start - 1].lower_ != "with":
+        return False
+    return ent.end == len(doc) or doc[ent.end].lower_ in _SENTENCE_END
+
+
 def _is_tech_context(doc, ent, other_techs):
     """Require capitalization plus a tech cue for ambiguous common-word terms."""
     if ent.text == ent.text.lower():
         return False
+    word = ent.text.lower()
     nxt = doc[ent.end] if ent.end < len(doc) else None
     prev = doc[ent.start - 1] if ent.start > 0 else None
-    if nxt is not None and (nxt.lower_ in _NEXT_CUES or doc.text[nxt.idx :].startswith(".js")):
+    if nxt is not None and nxt.lower_ == "-":
+        after = doc[ent.end + 1] if ent.end + 1 < len(doc) else None
+        if after is None or after.lower_ not in _HYPHEN_TECH_SUFFIXES:
+            return False
+    next_cues = _LIGHTNING_NEXT_CUES if word in _PREV_CUE_INSUFFICIENT else _NEXT_CUES
+    if nxt is not None and (nxt.lower_ in next_cues or doc.text[nxt.idx :].startswith(".js")):
         return True
-    if prev is not None and prev.lower_ in _PREV_CUES and ent.text.lower() not in _PREV_CUE_INSUFFICIENT:
+    if prev is not None and prev.lower_ in _PREV_CUES and word not in _PREV_CUE_INSUFFICIENT:
+        return True
+    if word in _PREV_CUE_INSUFFICIENT and _is_built_with_final(doc, ent):
         return True
     # Adjacent to another TECH match (optionally across a list joiner)
     for tok_idx, step in ((ent.end, 1), (ent.start - 1, -1)):
