@@ -125,12 +125,24 @@ class TestHTMLMarkdownConverterTempFileCleanup:
         """Create HTMLMarkdownConverter instance."""
         return HTMLMarkdownConverter()
 
-    def test_temp_file_cleanup_on_success(self, converter):
+    @pytest.fixture
+    def isolated_tempdir(self, tmp_path, monkeypatch):
+        """Redirect tempfile to a per-test directory.
+
+        The system temp dir is shared by every pytest-xdist worker, so
+        snapshotting it races with other workers' in-flight *.html files.
+        tempfile.tempdir is process-global, but each xdist worker is its own
+        process and monkeypatch restores it after the test, so this is safe.
+        """
+        monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+        return tmp_path
+
+    def test_temp_file_cleanup_on_success(self, converter, isolated_tempdir):
         """Temp files should be removed after successful conversion."""
         html = "<p>Test content</p>"
 
         # Get temp directory to count files before/after
-        temp_dir = tempfile.gettempdir()
+        temp_dir = str(isolated_tempdir)
         html_files_before = {f for f in os.listdir(temp_dir) if f.endswith(".html")}
 
         # Process HTML
@@ -144,12 +156,12 @@ class TestHTMLMarkdownConverterTempFileCleanup:
         new_files = html_files_after - html_files_before
         assert len(new_files) == 0, f"Temp files not cleaned up: {new_files}"
 
-    def test_temp_file_cleanup_on_exception_fallback_html(self, converter):
+    def test_temp_file_cleanup_on_exception_fallback_html(self, converter, isolated_tempdir):
         """Temp files should be cleaned up even when conversion fails (fallback to HTML)."""
         # Create HTML that might cause issues
         html = "<p>Test content</p>"
 
-        temp_dir = tempfile.gettempdir()
+        temp_dir = str(isolated_tempdir)
         html_files_before = {f for f in os.listdir(temp_dir) if f.endswith(".html")}
 
         # Process HTML - even if conversion fails, should fallback to HTML
@@ -163,12 +175,12 @@ class TestHTMLMarkdownConverterTempFileCleanup:
         new_files = html_files_after - html_files_before
         assert len(new_files) == 0, f"Temp files not cleaned up: {new_files}"
 
-    def test_temp_file_cleanup_with_raise_fallback(self):
+    def test_temp_file_cleanup_with_raise_fallback(self, isolated_tempdir):
         """Temp files should be cleaned up even when fallback_mode='raise'."""
         converter = HTMLMarkdownConverter(fallback_mode="raise")
         html = "<p>Test content</p>"
 
-        temp_dir = tempfile.gettempdir()
+        temp_dir = str(isolated_tempdir)
         html_files_before = {f for f in os.listdir(temp_dir) if f.endswith(".html")}
 
         # Process HTML
@@ -182,7 +194,7 @@ class TestHTMLMarkdownConverterTempFileCleanup:
         new_files = html_files_after - html_files_before
         assert len(new_files) == 0, f"Temp files not cleaned up: {new_files}"
 
-    def test_no_orphaned_temp_files(self, converter):
+    def test_no_orphaned_temp_files(self, converter, isolated_tempdir):
         """Process multiple documents and verify no orphaned temp files."""
         htmls = [
             "<p>Document 1</p>",
@@ -190,7 +202,7 @@ class TestHTMLMarkdownConverterTempFileCleanup:
             "<p>Document 3</p>",
         ]
 
-        temp_dir = tempfile.gettempdir()
+        temp_dir = str(isolated_tempdir)
         html_files_before = {f for f in os.listdir(temp_dir) if f.endswith(".html")}
 
         # Process all documents
