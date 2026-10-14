@@ -908,3 +908,28 @@ class TestSkillExtractorAdjectiveListComma:
         """Lists without a skill-verb head produce nothing."""
         assert extractor.extract("Experience with Python, Java and Kubernetes.") == []
         assert extractor.extract("No Kubernetes, and Redis.") == []
+
+
+class TestSkillExtractorParticipialWith:
+    """Past-tense/participle "built with <tech>" names a stack, not a skill (#551).
+
+    The action verb matched "build" whatever its tag, and the optional connector took
+    "with", so "Built with Go and gRPC" was emitted. A base-form verb with "with" is a
+    real skill phrase and is unchanged, as is a participle not followed by "with".
+    """
+
+    def test_built_with_stack_and_conjunct_not_extracted(self, extractor):
+        """'Built with Go and gRPC' lists technologies: no 'built with' skill."""
+        assert extractor.extract("Built with Go and gRPC.") == []
+
+    def test_built_with_proper_noun_not_extracted(self, extractor):
+        """'Built with Lightning' names a technology: no skill is produced."""
+        assert extractor.extract("Built with Lightning.") == []
+
+    def test_base_form_verb_with_tech_still_extracted(self, extractor):
+        """Base-form 'Build ... with Python' is a skill phrase and keeps its span."""
+        assert extractor.extract("Build scalable APIs with Python.") == ["build scalable apis"]
+
+    def test_participle_without_with_still_extracted(self, extractor):
+        """A participle skill verb not followed by 'with' keeps its span."""
+        assert extractor.extract("Built scalable APIs with Python.") == ["built scalable apis"]
