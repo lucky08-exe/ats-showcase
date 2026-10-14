@@ -2,7 +2,7 @@
 
 import asyncio
 import tempfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -141,6 +141,30 @@ class TestJobDataFlow:
         assert state_manager.top_matches[4]["overall_score"] == 96
 
 
+class _FakeClock:
+    """Controllable replacement for datetime.now() in src.tui.models.state."""
+
+    def __init__(self) -> None:
+        self.current = datetime(2026, 1, 1, 12, 0, 0)
+
+    def advance(self, seconds: float) -> None:
+        self.current += timedelta(seconds=seconds)
+
+
+@pytest.fixture
+def fake_clock(monkeypatch: pytest.MonkeyPatch) -> _FakeClock:
+    """Patch StateManager's time source so elapsed time is deterministic."""
+    clock = _FakeClock()
+
+    class _FakeDatetime(datetime):
+        @classmethod
+        def now(cls, tz: Any = None) -> Any:
+            return clock.current
+
+    monkeypatch.setattr("src.tui.models.state.datetime", _FakeDatetime)
+    return clock
+
+
 class TestPhaseMetricsCalculation:
     """Test ETA, throughput, and progress calculations."""
 
@@ -154,38 +178,32 @@ class TestPhaseMetricsCalculation:
 
         assert state_manager.phase_metrics["crawl"].progress_percent == 25.0
 
-    def test_throughput_calculation(self, state_manager: StateManager) -> None:
+    def test_throughput_calculation(self, state_manager: StateManager, fake_clock: _FakeClock) -> None:
         """Items per second calculated from elapsed time."""
-        import time
-
         state_manager.start_phase("assess", total_items=10)
 
-        # Process 2 items over ~0.1 seconds
+        # Process 2 items over 0.1 fake seconds (0.05 s per item)
         for _ in range(2):
             state_manager.increment_phase_progress("assess", tokens=200)
-            time.sleep(0.05)
+            fake_clock.advance(0.05)
 
         throughput = state_manager.phase_metrics["assess"].items_per_second
-        assert throughput > 0, "Throughput should be positive"
-        assert throughput <= 20, "Throughput should be reasonable for test speed"
+        assert throughput == pytest.approx(2 / 0.1)  # 20 items/sec
 
-    def test_eta_seconds_calculation(self, state_manager: StateManager) -> None:
+    def test_eta_seconds_calculation(self, state_manager: StateManager, fake_clock: _FakeClock) -> None:
         """ETA estimated from throughput and remaining items."""
-        import time
-
         state_manager.start_phase("export", total_items=10)
 
-        # Process 2 items to establish throughput
+        # Process 2 items over 0.1 fake seconds to establish throughput
         for _ in range(2):
             state_manager.increment_phase_progress("export", tokens=100)
-            time.sleep(0.05)
+            fake_clock.advance(0.05)
 
         eta = state_manager.phase_metrics["export"].eta_seconds
         remaining = 10 - 2
 
-        # ETA should be positive and reasonable
-        assert eta > 0, "ETA should be positive when items remain"
-        assert eta < remaining * 10, "ETA should be less than 10 seconds per remaining item"
+        # 8 remaining items at 20 items/sec
+        assert eta == pytest.approx(remaining / (2 / 0.1))  # 0.4 s
 
 
 class TestErrorHandling:
