@@ -205,6 +205,77 @@ def _is_join_conjunction(tok: Token) -> bool:
     return tok.pos_ == "CCONJ" and tok.lower_ in _JOIN_CONJUNCTIONS
 
 
+# --- Bare comma inside an adjective list (#557) ----------------------------------
+#
+# "design fault-tolerant, low-latency services": the bare comma separates premodifiers
+# of one head noun, so the comma is part of the noun run. Under the #509 rule a bare
+# comma is punctuation, which cut the run at "fault-tolerant". The adjective-list
+# branch below is the exception, and it applies only when BOTH hold:
+#   - the token before the comma is adjectival: an ADJ, an amod participle, or a glued
+#     compound whose first half is one ("high-performance", "data-driven");
+#   - the comma list continues through ADJ-led segments and ends at a plain noun head.
+# A segment is a plain head only when its last token is a NOUN/PROPN not glued to a
+# hyphen before it, so "low-latency" alone is not a head and "low-latency services" is.
+# A noun before the comma ("design systems, platform teams") keeps the #509 rule.
+# The list commits only at a plain-noun head; a trailing clause ("..., building APIs")
+# is not absorbed. A conjunction closes the list ("..., low-latency, and scalable services").
+
+
+def _is_glued_hyphen(doc: Doc, i: int) -> bool:
+    return 0 <= i < len(doc) and doc[i].text == "-" and not _is_spaced_dash(doc[i])
+
+
+def _is_adjectival(tok: Token) -> bool:
+    return tok.pos_ == "ADJ" or _is_amod_participle(tok)
+
+
+def _ends_adjectival_modifier(doc: Doc, comma: int) -> bool:
+    """True if the token before the comma at ``comma`` is an adjectival modifier (#557)."""
+    before = comma - 1
+    if before < 0:
+        return False
+    if _is_adjectival(doc[before]):
+        return True
+    # Glued compound before the comma: "high-performance" (NOUN after ADJ), "data-driven".
+    return _is_glued_hyphen(doc, before - 1) and before >= 2 and _is_adjectival(doc[before - 2])
+
+
+def _is_plain_noun_head(doc: Doc, run_start: int, run_end: int) -> bool:
+    """True if the run ends in a noun that is not the second half of a glued compound."""
+    last = run_end - 1
+    if last < run_start or doc[last].pos_ not in ("NOUN", "PROPN"):
+        return False
+    return not (last - 1 >= run_start and _is_glued_hyphen(doc, last - 1))
+
+
+def _adjective_list_end(doc: Doc, comma: int) -> int | None:
+    """End (exclusive) of an adjective list after the bare comma at ``comma``, or None (#557).
+
+    Returns the end of the last segment that is a plain noun head. None when the
+    comma does not follow an adjectival modifier or no segment ends in a noun head.
+    """
+    if not _ends_adjectival_modifier(doc, comma):
+        return None
+    best: int | None = None
+    cursor = comma
+    while cursor < len(doc) and doc[cursor].text == ",":
+        seg = cursor + 1
+        closes = seg < len(doc) and _is_join_conjunction(doc[seg])
+        if closes:
+            seg += 1
+        if seg >= len(doc) or not _is_adjectival(doc[seg]):
+            break
+        run_end = _noun_run_end(doc, seg)
+        if run_end is None:
+            break
+        if _is_plain_noun_head(doc, seg, run_end):
+            best = run_end
+        if closes:
+            break
+        cursor = run_end
+    return best
+
+
 def _coordinated_end(doc: Doc, head_end: int) -> int:
     """Return the end of the coordinated span that starts at a head ending at ``head_end``.
 
@@ -217,6 +288,13 @@ def _coordinated_end(doc: Doc, head_end: int) -> int:
             # ", and X" / ", or X" commits; a bare ", X" is tentative.
             after_comma = cursor + 1
             commits = after_comma < len(doc) and _is_join_conjunction(doc[after_comma])
+            if not commits:
+                # Bare comma between premodifiers of one head (#557), not a noun conjunct.
+                list_end = _adjective_list_end(doc, cursor)
+                if list_end is not None:
+                    committed = list_end
+                    cursor = list_end
+                    continue
             run_start = after_comma + 1 if commits else after_comma
         elif _is_join_conjunction(doc[cursor]):
             commits = True

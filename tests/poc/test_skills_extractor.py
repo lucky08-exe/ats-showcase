@@ -812,3 +812,99 @@ class TestSkillExtractorParticipleLedHead:
     def test_glued_compound_after_head_unchanged(self, extractor):
         """A function word inside a glued compound after the head is not matched by this pattern."""
         assert extractor.extract("Design end-to-end distributed systems") == []
+
+
+class TestSkillExtractorAdjectiveListComma:
+    """A bare comma between premodifiers of one head noun stays in the span (#557).
+
+    "design fault-tolerant, low-latency services": the comma separates adjectives, not noun
+    conjuncts. The #509 rule (bare comma is punctuation) would cut the run at the comma. The
+    adjective-list branch keeps the comma only when the token before it is adjectival (ADJ,
+    amod participle, or a glued compound ending in one) and the list ends at a plain noun
+    head. A noun before the comma, a clause after the head, and a spaced dash keep #509.
+    """
+
+    def test_adjective_pair_before_noun_head(self, extractor):
+        """'fault-tolerant, low-latency services' is one premodifier list on one head."""
+        assert extractor.extract("You will design fault-tolerant, low-latency services.") == [
+            "design fault-tolerant, low-latency services"
+        ]
+
+    def test_three_adjectives_before_noun_head(self, extractor):
+        """Two bare commas in an adjective list close on the noun head."""
+        assert extractor.extract("You will build secure, reliable, scalable services in Python.") == [
+            "build secure, reliable, scalable services"
+        ]
+
+    def test_adjective_pair_plain_words(self, extractor):
+        """Plain single-word adjectives form the same list."""
+        assert extractor.extract("You will design clean, maintainable code.") == ["design clean, maintainable code"]
+
+    def test_hyphen_compound_before_comma(self, extractor):
+        """A glued compound before the comma ('high-performance') is adjectival."""
+        assert extractor.extract("You will design high-performance, low-latency systems.") == [
+            "design high-performance, low-latency systems"
+        ]
+
+    def test_hyphen_compound_second_segment(self, extractor):
+        """A glued compound as the second segment ('cross-functional') still ends at the noun."""
+        assert extractor.extract("You will lead agile, cross-functional teams.") == [
+            "lead agile, cross-functional teams"
+        ]
+
+    def test_adjective_list_closed_by_conjunction(self, extractor):
+        """A conjunction-closed adjective list keeps the existing span (no regression)."""
+        assert extractor.extract("You will design fault-tolerant, low-latency, and scalable services.") == [
+            "design fault-tolerant, low-latency, and scalable services"
+        ]
+
+    def test_adjective_list_then_trailing_clause(self, extractor):
+        """A verb-led clause after the list is its own match and is not absorbed."""
+        assert extractor.extract("You will design fault-tolerant, low-latency services, building APIs.") == [
+            "building apis",
+            "design fault-tolerant, low-latency services",
+        ]
+
+    def test_adjective_list_then_spaced_dash_ends_span(self, extractor):
+        """A spaced dash after the list still ends the span (#508 spaced-dash rule)."""
+        assert extractor.extract("You will design fault-tolerant, low-latency services - build tools.") == [
+            "design fault-tolerant, low-latency services"
+        ]
+
+    def test_adjective_comma_without_noun_head_unchanged(self, extractor):
+        """A list with no noun head keeps only the head before the comma."""
+        assert extractor.extract("You will design fault-tolerant, low-latency.") == ["design fault-tolerant"]
+
+    def test_noun_before_comma_keeps_509_rule(self, extractor):
+        """A noun before the comma is a noun conjunct: the span stops at the comma (#509)."""
+        assert extractor.extract("You will design systems, low-latency platforms.") == ["design systems"]
+
+    def test_noun_before_comma_with_adjective_pair_unchanged(self, extractor):
+        """'design systems, scalable and resilient' keeps the existing tentative-comma result."""
+        assert extractor.extract("You will design systems, scalable and resilient.") == [
+            "design systems, scalable and resilient"
+        ]
+
+    def test_serial_noun_list_unchanged(self, extractor):
+        """A serial list of separate nouns with a verb conjunct is unchanged (#509)."""
+        assert extractor.extract("You will design systems, platforms, and develop tools.") == [
+            "design systems",
+            "develop tools",
+        ]
+
+    def test_verb_after_comma_is_not_adjective(self, extractor):
+        """A verb after a comma ('build tools') is its own match, not a premodifier."""
+        assert extractor.extract("You will design systems, build tools.") == ["build tools", "design systems"]
+
+    def test_list_of_separate_skills_unchanged(self, extractor):
+        """A list of separate skills after a verb is unchanged."""
+        assert extractor.extract("You will build APIs, services, and tools.") == ["build apis, services, and tools"]
+
+    def test_lead_noun_list_unchanged(self, extractor):
+        """A noun-led comma list ('data science, platform teams') keeps the #509 cut."""
+        assert extractor.extract("You will lead data science, platform teams.") == ["lead data science"]
+
+    def test_no_skill_verb_no_match(self, extractor):
+        """Lists without a skill-verb head produce nothing."""
+        assert extractor.extract("Experience with Python, Java and Kubernetes.") == []
+        assert extractor.extract("No Kubernetes, and Redis.") == []
