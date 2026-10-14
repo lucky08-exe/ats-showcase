@@ -325,6 +325,8 @@ def _coordinated_end(doc: Doc, head_end: int) -> int:
             break
         if commits:
             committed = run_end
+            # A committed conjunct ends the bare-noun run, so a later adjective list may open (#557).
+            bare_comma_conjunct = False
         cursor = run_end
     return committed
 
