@@ -129,7 +129,8 @@ def _noun_run_end(doc: Doc, start: int) -> int | None:
         return None
     end = _run_end(doc, start)
     if end < len(doc) and doc[end].text == "-" and not _is_spaced_dash(doc[end]):
-        if end + 1 < len(doc) and doc[end + 1].pos_ in _NOUN_RUN_POS:
+        # The glued join may continue with a participle ("data-driven platforms", #556).
+        if end + 1 < len(doc) and _starts_noun_run(doc, end + 1):
             end = _run_end(doc, end + 1)
     return end
 
@@ -178,6 +179,26 @@ def _participle_head_end(doc: Doc, head_end: int) -> int:
     if head_end < len(doc) and _is_amod_participle(doc[head_end]) and _starts_noun_run(doc, head_end):
         return _run_end(doc, head_end)
     return head_end
+
+
+# --- Glued compound tails (#556) -----------------------------------------------
+#
+# A glued compound can hold a function word between two hyphens: "state-of-the-art",
+# "end-to-end" (matched by the ADP pattern in SkillExtractor). Its participle second
+# half, "data-driven", is tagged VERB and would start a match as a skill verb ("drive"),
+# yielding "driven platform". A participle glued after a hyphen is never a head verb,
+# so such a match is dropped. The full span "design data-driven platforms" comes from
+# the participle hyphen pattern.
+
+
+def _is_glued_participle_head(doc: Doc, start: int) -> bool:
+    """True if ``start`` is an amod participle glued to a preceding hyphen ("driven" in "data-driven")."""
+    return (
+        _is_amod_participle(doc[start])
+        and start > 0
+        and doc[start - 1].text == "-"
+        and not _is_spaced_dash(doc[start - 1])
+    )
 
 
 def _is_join_conjunction(tok: Token) -> bool:
@@ -255,8 +276,31 @@ class SkillExtractor:
         # let one intra-word hyphen join two noun runs; spaced dashes are rejected in
         # extract() via _has_spaced_dash(). Only one hyphen join per run is matched.
         hyphen_pattern = [action_verb(), connector(), noun_group(), {"ORTH": "-"}, noun_group()]
+        # Function word inside a glued compound (#556): "state-of-the-art" (ADP + DET) and
+        # "end-to-end" (ADP only). The DET and its hyphen are optional; each hyphen is glued.
+        hyphen_adp_pattern = [
+            action_verb(),
+            connector(),
+            noun_group(),
+            {"ORTH": "-"},
+            {"POS": "ADP"},
+            {"ORTH": "-"},
+            {"POS": "DET", "OP": "?"},
+            {"ORTH": "-", "OP": "?"},
+            noun_group(),
+        ]
+        # Participle second half of a glued compound (#556): "data-driven platforms". spaCy
+        # tags the participle VERB with dep amod, which the noun-run pattern does not accept.
+        hyphen_participle_pattern = [
+            action_verb(),
+            connector(),
+            noun_group(),
+            {"ORTH": "-"},
+            {"TAG": {"IN": ["VBN", "VBG"]}, "DEP": "amod"},
+            noun_group(),
+        ]
         # Add patterns to matcher
-        self.matcher.add("SKILL_PHRASE", [pattern, hyphen_pattern])
+        self.matcher.add("SKILL_PHRASE", [pattern, hyphen_pattern, hyphen_adp_pattern, hyphen_participle_pattern])
 
     def extract(self, text):
         try:
@@ -276,7 +320,7 @@ class SkillExtractor:
                     matches.append(doc[i:obj_end])
             # Drop hyphen-variant matches whose "-" is spaced punctuation; the plain
             # pattern still yields the non-hyphenated prefix for those sentences.
-            matches = [m for m in matches if not _has_spaced_dash(m)]
+            matches = [m for m in matches if not _has_spaced_dash(m) and not _is_glued_participle_head(doc, m.start)]
             # Extend each head through its coordinated conjuncts (#509). The extended
             # span contains the head, so filter_spans keeps it over the bare head.
             extended = [doc[m.start : _coordinated_end(doc, _participle_head_end(doc, m.end))] for m in matches]
