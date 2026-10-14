@@ -18,6 +18,7 @@ from src.tokenization.company_names import (
     is_company_keyword,
 )
 from src.tokenization.preprocessor import Preprocessor
+from tests.perf_utils import median_elapsed_ms
 
 
 class TestCompanyNamesTaxonomy:
@@ -237,8 +238,6 @@ class TestPreprocessorCompanyFiltering:
     @pytest.mark.perf
     def test_performance_extraction_speed(self, preprocessor: Preprocessor) -> None:
         """Test that company filtering doesn't significantly impact performance."""
-        import time
-
         # Use a representative job posting
         job_text = (
             "We're seeking a Senior Software Engineer with 5+ years of experience. "
@@ -251,13 +250,14 @@ class TestPreprocessorCompanyFiltering:
             "Located in Seattle, WA or remote."
         )
 
-        start = time.time()
-        for _ in range(10):
-            preprocessor.extract_entities(job_text)
-        elapsed = time.time() - start
+        def extract_ten() -> None:
+            for _ in range(10):
+                preprocessor.extract_entities(job_text)
+
+        elapsed_ms = median_elapsed_ms(extract_ten, repeats=3, warmup=1)
 
         # Should extract 10 jobs in <2 seconds (200ms per job)
-        avg_time = elapsed / 10
+        avg_time = elapsed_ms / 10 / 1000
         assert avg_time < 0.2, f"Extraction too slow: {avg_time * 1000:.0f}ms per job (target: <200ms)"
 
 

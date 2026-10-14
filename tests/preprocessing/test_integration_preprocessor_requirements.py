@@ -5,12 +5,12 @@ Validates trigger-based requirement extraction and storage.
 """
 
 import json
-import time
 from typing import Any
 
 import pytest
 
 from src.tokenization.preprocessor import Preprocessor
+from tests.perf_utils import median_elapsed_ms
 
 
 @pytest.fixture
@@ -166,19 +166,17 @@ class TestRequirementExtractionIntegration:
     @pytest.mark.perf
     def test_performance_no_regression(self, preprocessor, sample_jobs):
         """Verify requirement extraction adds <50ms overhead per job."""
-        # Warm up spaCy pipeline
-        preprocessor.nlp("Warm up text")
 
-        # Measure extraction time for 5 jobs
-        start_time = time.time()
-        for job in sample_jobs:
-            preprocessor.extract_trigger_requirements(job["description"])
-        total_time = time.time() - start_time
+        def run_batch() -> None:
+            for job in sample_jobs:
+                preprocessor.extract_trigger_requirements(job["description"])
 
-        avg_time_per_job = total_time / len(sample_jobs) * 1000  # Convert to ms
+        # Warm-up run primes the same measured path; median over repeats
+        total_ms = median_elapsed_ms(run_batch, repeats=3, warmup=1)
+        avg_time_per_job = total_ms / len(sample_jobs)
 
         print(f"Average extraction time: {avg_time_per_job:.2f}ms per job")
-        print(f"Total time for {len(sample_jobs)} jobs: {total_time:.2f}s")
+        print(f"Total time for {len(sample_jobs)} jobs: {total_ms:.2f}ms")
 
         # Assert performance requirement: <50ms per job
         assert avg_time_per_job < 50.0, f"Extraction too slow: {avg_time_per_job:.2f}ms per job"

@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 
 from src.tokenization.preprocessor import Preprocessor
+from tests.perf_utils import median_elapsed_ms
 
 logger = logging.getLogger(__name__)
 
@@ -594,10 +595,14 @@ class TestPerformanceBenchmark:
             "Expertise in distributed systems design."
         )
 
-        start_time = time.time()
+        def run_once() -> None:
+            doc = preprocessor.nlp(document)  # type: ignore[misc]
+            getattr(doc._, "requirement_spans", [])
+
+        elapsed_ms = median_elapsed_ms(run_once, repeats=3, warmup=1)
+
         doc = preprocessor.nlp(document)  # type: ignore[misc]
         spans = getattr(doc._, "requirement_spans", [])
-        elapsed_ms = (time.time() - start_time) * 1000
 
         # Verify spans extracted
         assert len(spans) > 0, "Should extract spans from complex document"
@@ -621,12 +626,15 @@ class TestPerformanceBenchmark:
             "Experience with Docker, containerization, and microservices architecture",
         ]
 
+        # Warm-up on first document (not timed)
+        preprocessor.nlp(documents[0])  # type: ignore[misc]
+
         times = []
         for doc_text in documents:
-            start_time = time.time()
+            start_time = time.perf_counter()
             doc = preprocessor.nlp(doc_text)  # type: ignore[misc]
             spans = getattr(doc._, "requirement_spans", [])
-            elapsed_ms = (time.time() - start_time) * 1000
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
             times.append(elapsed_ms)
 
             assert len(spans) > 0, f"Should extract spans from: {doc_text[:50]}"
