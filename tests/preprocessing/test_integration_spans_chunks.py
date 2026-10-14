@@ -256,14 +256,19 @@ class TestSpanPreservationIntegration:
         )
         assert content_coverage > 0.8, f"Chunks should preserve ~80% of content, got {content_coverage:.0%}"
 
+    @pytest.mark.perf
     def test_multiple_jobs_span_preservation(self, preprocessor: Preprocessor, chunker: SemanticChunker) -> None:
         """Test span preservation across 5 sample jobs.
+
+        Correctness pass runs first (span/chunk counts, chunk validity). Timing
+        uses perf_counter() with a warm-up pass and median of 3 repeats to
+        reduce single-sample CI jitter (issue #570; CI run 38633320523 flaked
+        at 104 ms/job under xdist). Perf-marked: runs in isolated serial CI step.
 
         Args:
             preprocessor: Preprocessor fixture
             chunker: Chunker fixture
         """
-        start_time = time.time()
         total_spans = 0
         total_chunks = 0
         jobs_processed = 0
@@ -284,8 +289,20 @@ class TestSpanPreservationIntegration:
             assert len(chunks) > 0, f"Should produce chunks for {job['id']}"
             assert all(isinstance(c, str) and c.strip() for c in chunks), f"Invalid chunks for {job['id']}"
 
-        elapsed_ms = (time.time() - start_time) * 1000
-        avg_time_per_job = elapsed_ms / jobs_processed
+        def run_batch() -> float:
+            start = time.perf_counter()
+            for job in SAMPLE_JOBS:
+                text = job["description"]
+                doc = preprocessor.nlp(text)  # type: ignore[misc]
+                _ = chunker.chunk(text, doc=doc)
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            return elapsed_ms / len(SAMPLE_JOBS)  # Per-job time
+
+        # Warm-up absorbs first-call cost; median of repeats suppresses jitter.
+        run_batch()
+        samples = [run_batch() for _ in range(3)]
+        avg_time_per_job = statistics.median(samples)
+        elapsed_ms = avg_time_per_job * jobs_processed
 
         logging.info(
             f"Processed {jobs_processed} jobs: "
@@ -639,6 +656,7 @@ class TestDetailedPerformanceMetrics:
         # Overall average should be <200ms (sanity check for regression)
         assert avg_total < 200, f"Average time per job {avg_total:.1f}ms exceeds 200ms target"
 
+    @pytest.mark.perf
     def test_scaling_with_job_count(
         self,
         preprocessor: Preprocessor,
@@ -695,6 +713,7 @@ class TestDetailedPerformanceMetrics:
 class TestComprehensiveEndToEnd:
     """Full end-to-end validation across all 10 jobs."""
 
+    @pytest.mark.perf
     def test_pipeline_completeness_all_jobs(
         self,
         preprocessor: Preprocessor,

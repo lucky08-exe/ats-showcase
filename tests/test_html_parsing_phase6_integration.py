@@ -142,6 +142,7 @@ class TestHTMLParsingIntegration:
         # Target 99%+ quality
         assert quality_score >= 99.0, f"Quality score {quality_score:.1f}% below target of 99%"
 
+    @pytest.mark.perf
     def test_performance_target(self, preprocessor):
         """Test that extraction performance is <100ms per job."""
         test_text = (
@@ -295,6 +296,7 @@ class TestPerformanceMetrics:
         """Initialize Preprocessor."""
         return Preprocessor(model="en_core_web_md")
 
+    @pytest.mark.perf
     def test_batch_processing_performance(self, preprocessor):
         """Verify batch processing performance is reasonable."""
         jobs = [

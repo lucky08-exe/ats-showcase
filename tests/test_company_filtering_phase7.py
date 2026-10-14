@@ -234,6 +234,7 @@ class TestPreprocessorCompanyFiltering:
         assert any("python" in e.lower() for e in all_entities), f"Python should be extracted, got: {all_entities}"
         assert len(all_entities) > 0, "Should extract some entities"
 
+    @pytest.mark.perf
     def test_performance_extraction_speed(self, preprocessor: Preprocessor) -> None:
         """Test that company filtering doesn't significantly impact performance."""
         import time
