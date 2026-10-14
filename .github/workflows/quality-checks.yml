@@ -61,12 +61,23 @@ jobs:
           fail_ci_if_error: false
 
       - name: Run performance tests (serial, advisory)
+        id: perf
         # Wall-clock budget tests run alone, without xdist or coverage, so CPU contention
         # does not flake them. Advisory: failures are reported but do not fail the job (#570).
         continue-on-error: true
         run: |
           export PYTHONPATH="${{ github.workspace }}/src:$PYTHONPATH"
           uv run pytest tests/ -v --ignore=tests/poc -m perf -n 0 --no-cov
+
+      - name: Surface advisory perf test failure
+        if: always() && steps.perf.outcome == 'failure'
+        run: |
+          {
+            echo "### Advisory perf tests failed"
+            echo ""
+            echo "Python ${{ matrix.python-version }}: see the 'Run performance tests' step. Job conclusion unchanged (advisory)."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning title=Advisory perf tests failed::Python ${{ matrix.python-version }}: see the 'Run performance tests' step"
 
   quality-poc:
     name: Quality Assurance (poc)
