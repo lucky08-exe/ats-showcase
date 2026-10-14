@@ -9,15 +9,19 @@ from tokenization.counter import TokenCounter
 from tokenization.preprocessor import Preprocessor
 
 
-@pytest.mark.unit
-def test_preprocessor_initialization():
-    """Test preprocessor with spaCy model."""
-    # Skip if model not installed
+@pytest.fixture(scope="session")
+def md_preprocessor():
+    """Shared Preprocessor (en_core_web_md) for read-only tests; skips if the model is unavailable."""
     try:
-        preprocessor = Preprocessor()
-        assert preprocessor.model_name == "en_core_web_md"
+        return Preprocessor()
     except Exception as e:
         pytest.skip(f"spaCy model not available: {e}")
+
+
+@pytest.mark.unit
+def test_preprocessor_initialization(md_preprocessor):
+    """Test preprocessor with spaCy model."""
+    assert md_preprocessor.model_name == "en_core_web_md"
 
 
 @pytest.mark.unit
@@ -62,7 +66,7 @@ def test_token_pricing():
 
 
 @pytest.mark.unit
-def test_extract_entities_by_section_routes_responsibilities_ner_entities():
+def test_extract_entities_by_section_routes_responsibilities_ner_entities(md_preprocessor):
     """Issue #196: NER entities in a '## Responsibilities' section route to requirements.
 
     `_route_entity_by_section`'s is_req_section check substring-matches the
@@ -73,10 +77,7 @@ def test_extract_entities_by_section_routes_responsibilities_ner_entities():
     section_name == "responsibilities"; this test locks in the NER-entity path
     doing the same.
     """
-    try:
-        preprocessor = Preprocessor()
-    except Exception as e:
-        pytest.skip(f"spaCy model not available: {e}")
+    preprocessor = md_preprocessor
 
     markdown_text = (
         "## Responsibilities\n\n"

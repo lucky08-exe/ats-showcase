@@ -52,6 +52,12 @@ def expected_output() -> Dict[str, Any]:
         return cast(Dict[str, Any], json.load(f))
 
 
+@pytest.fixture(scope="session")
+def default_nlp():
+    """Shared en_core_web_md pipeline with default section patterns (loaded once per session)."""
+    return load_spacy_model("en_core_web_md")
+
+
 class TestPatternModularity:
     """Test pattern parameterization (Issue #265)."""
 
@@ -74,9 +80,9 @@ class TestPatternModularity:
         nlp = load_spacy_model("en_core_web_md", patterns=custom_patterns)
         assert "span_ruler" in nlp.pipe_names
 
-    def test_detect_sections_with_default_display_names(self, raw_job_description):
+    def test_detect_sections_with_default_display_names(self, raw_job_description, default_nlp):
         """Verify detect_sections uses default display names."""
-        nlp = load_spacy_model("en_core_web_md")
+        nlp = default_nlp
         doc = detect_sections(nlp, raw_job_description)
         # Should have detected at least some sections
         assert doc._.section_labels or len(doc._.section_labels) == 0
@@ -84,31 +90,31 @@ class TestPatternModularity:
         for section in doc._.detected_sections:
             assert isinstance(section["display_name"], str)
 
-    def test_detect_sections_with_custom_display_names(self, raw_job_description):
+    def test_detect_sections_with_custom_display_names(self, raw_job_description, default_nlp):
         """Verify detect_sections accepts custom display names."""
         custom_names = {
             "SECTION_REQUIREMENTS": "Custom Requirements Label",
             "SECTION_QUALIFICATIONS": "Custom Qualifications Label",
         }
-        nlp = load_spacy_model("en_core_web_md")
+        nlp = default_nlp
         doc = detect_sections(nlp, raw_job_description, display_names=custom_names)
         # Any detected sections should use custom names
         for section in doc._.detected_sections:
             if section["label"] in custom_names:
                 assert section["display_name"] == custom_names[section["label"]]
 
-    def test_classify_sentence_with_default_adjustments(self):
+    def test_classify_sentence_with_default_adjustments(self, default_nlp):
         """Verify classify_sentence_with_section_boost uses default adjustments."""
-        nlp = load_spacy_model("en_core_web_md")
+        nlp = default_nlp
         sentence = "Required: 5+ years of Python experience"
         result = classify_sentence_with_section_boost(sentence, "SECTION_REQUIREMENTS", nlp)
         if result:
             # Should have positive section boost for REQUIREMENTS
             assert result["section_boost"] == DEFAULT_ADJUSTMENTS["SECTION_REQUIREMENTS"]
 
-    def test_classify_sentence_with_custom_adjustments(self):
+    def test_classify_sentence_with_custom_adjustments(self, default_nlp):
         """Verify classify_sentence_with_section_boost accepts custom adjustments."""
-        nlp = load_spacy_model("en_core_web_md")
+        nlp = default_nlp
         custom_adjustments = {"SECTION_REQUIREMENTS": 0.50}  # Higher boost
         sentence = "Required: 5+ years of Python experience"
         result = classify_sentence_with_section_boost(
@@ -121,9 +127,9 @@ class TestPatternModularity:
 class TestRegexPatterns:
     """Test new regex-based patterns for multi-word headers."""
 
-    def test_regex_pattern_knowledge_skills(self, raw_job_description):
+    def test_regex_pattern_knowledge_skills(self, raw_job_description, default_nlp):
         """Verify regex pattern matches 'Knowledge, Skills & Abilities'."""
-        nlp = load_spacy_model("en_core_web_md")
+        nlp = default_nlp
         doc = detect_sections(nlp, raw_job_description)
         labels = doc._.section_labels
         # Should detect SECTION_KNOWLEDGE_SKILLS if header exists in text
@@ -131,18 +137,18 @@ class TestRegexPatterns:
         # This is a soft assertion - pattern should match or no match is OK for now
         assert isinstance(labels, set)
 
-    def test_regex_pattern_in_office(self, raw_job_description):
+    def test_regex_pattern_in_office(self, raw_job_description, default_nlp):
         """Verify regex pattern matches 'In Office Requirements'."""
-        nlp = load_spacy_model("en_core_web_md")
+        nlp = default_nlp
         doc = detect_sections(nlp, raw_job_description)
         labels = doc._.section_labels
         # Should detect SECTION_IN_OFFICE if header exists in text
         # (Text inspection shows "In Office Requirements" is present)
         assert isinstance(labels, set)
 
-    def test_regex_pattern_what_you_do(self, raw_job_description):
+    def test_regex_pattern_what_you_do(self, raw_job_description, default_nlp):
         """Verify regex pattern matches 'What You'll Do'."""
-        nlp = load_spacy_model("en_core_web_md")
+        nlp = default_nlp
         doc = detect_sections(nlp, raw_job_description)
         labels = doc._.section_labels
         # Should detect SECTION_WHAT_YOU_DO if header exists in text
@@ -153,9 +159,9 @@ class TestRegexPatterns:
 class TestSectionInOffice:
     """Comprehensive tests for SECTION_IN_OFFICE extraction (Issue #265)."""
 
-    def test_section_in_office_detected(self, raw_job_description):
+    def test_section_in_office_detected(self, raw_job_description, default_nlp):
         """Verify detect_sections() recognizes SECTION_IN_OFFICE header."""
-        nlp = load_spacy_model("en_core_web_md")
+        nlp = default_nlp
         doc = detect_sections(nlp, raw_job_description)
 
         # Check that SECTION_IN_OFFICE was detected
@@ -173,11 +179,11 @@ class TestSectionInOffice:
         section_dict = in_office_sections[0]
         assert section_dict["display_name"] == "In Office Requirements"
 
-    def test_section_in_office_content_extracted(self, raw_job_description):
+    def test_section_in_office_content_extracted(self, raw_job_description, default_nlp):
         """Verify extract_target_section_content() retrieves content from SECTION_IN_OFFICE."""
         from src.poc.extract_requirements_c import extract_target_section_content
 
-        nlp = load_spacy_model("en_core_web_md")
+        nlp = default_nlp
         doc = detect_sections(nlp, raw_job_description)
 
         # Extract from target sections (should include SECTION_IN_OFFICE by default)
@@ -200,9 +206,9 @@ class TestSectionInOffice:
         )
         assert has_keywords, f"SECTION_IN_OFFICE content missing expected keywords. Got: {full_content[:100]}"
 
-    def test_section_in_office_confidence_boost(self, raw_job_description):
+    def test_section_in_office_confidence_boost(self, raw_job_description, default_nlp):
         """Verify classify_sentence_with_section_boost() applies correct boost for SECTION_IN_OFFICE."""
-        nlp = load_spacy_model("en_core_web_md")
+        nlp = default_nlp
 
         # Test with a realistic in-office requirement
         sentence = "This role is based in our Seattle office with at least 4 days per week on-site"
@@ -376,17 +382,17 @@ class TestBackwardCompatibility:
         assert hasattr(result, "requirements_detailed")
         assert hasattr(result, "metadata")
 
-    def test_detect_sections_no_display_names(self, raw_job_description):
+    def test_detect_sections_no_display_names(self, raw_job_description, default_nlp):
         """Verify detect_sections works without display_names parameter."""
-        nlp = load_spacy_model("en_core_web_md")
+        nlp = default_nlp
         doc = detect_sections(nlp, raw_job_description)
         # Should use defaults
         assert doc._.detected_sections is not None
         assert isinstance(doc._.section_labels, set)
 
-    def test_classify_sentence_no_adjustments(self):
+    def test_classify_sentence_no_adjustments(self, default_nlp):
         """Verify classify_sentence_with_section_boost works without adjustments."""
-        nlp = load_spacy_model("en_core_web_md")
+        nlp = default_nlp
         sentence = "Required: 5+ years of Python"
         result = classify_sentence_with_section_boost(sentence, "SECTION_REQUIREMENTS", nlp)
         # Should use defaults

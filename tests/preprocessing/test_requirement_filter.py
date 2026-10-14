@@ -17,7 +17,7 @@ from spacy.tokens import Doc
 import src.preprocessing.requirement_filter  # noqa: F401
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def nlp() -> Language:
     """Initialize spaCy Language object with requirement_filter component.
 

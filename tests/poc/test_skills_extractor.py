@@ -9,7 +9,7 @@ from src.poc.skills.extract_skills_a import SkillExtractor
 from src.poc.skills.patterns import SKILL_VERBS
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def extractor():
     """Initialize SkillExtractor with spaCy model."""
     return SkillExtractor(model_name="en_core_web_md")

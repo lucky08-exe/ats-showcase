@@ -33,7 +33,7 @@ from src.poc.tweak.multi_line_paragraph import (
 # ============================================================================
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def nlp():
     """Load spaCy model for testing."""
     try:

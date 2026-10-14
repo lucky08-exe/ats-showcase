@@ -8,8 +8,8 @@ from src.tokenization.preprocessor import Preprocessor
 class TestHTMLParsingBaseline:
     """Baseline tests for HTML parsing quality before Phase 2 improvements."""
 
-    @pytest.fixture
-    def preprocessor(self, monkeypatch):
+    @pytest.fixture(scope="session")
+    def preprocessor(self):
         """Initialize Preprocessor with real spaCy model."""
         preprocessor = Preprocessor(model="en_core_web_md")
         return preprocessor
@@ -165,8 +165,8 @@ class TestHTMLParsingBaseline:
 class TestEnhancedFragmentDetection:
     """Test enhanced fragment detection for Phase 3."""
 
-    @pytest.fixture
-    def preprocessor(self, monkeypatch):
+    @pytest.fixture(scope="session")
+    def preprocessor(self):
         """Initialize Preprocessor with real spaCy model."""
         preprocessor = Preprocessor(model="en_core_web_md")
         return preprocessor

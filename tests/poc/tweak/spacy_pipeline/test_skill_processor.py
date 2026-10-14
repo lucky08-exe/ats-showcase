@@ -21,7 +21,7 @@ from src.poc.tweak.patterns import SectionType
 from src.poc.tweak.spacy_pipeline import SkillProcessor
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def spacy_module():
     """Import spacy (skip test if not available)."""
     try:
@@ -32,7 +32,7 @@ def spacy_module():
         pytest.skip("spaCy not installed")
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def nlp(spacy_module: Any) -> Any:
     """Load spaCy model (skip if not available)."""
     try:

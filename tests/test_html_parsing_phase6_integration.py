@@ -12,8 +12,8 @@ from src.tokenization.preprocessor import Preprocessor
 class TestHTMLParsingIntegration:
     """End-to-end integration tests for HTML parsing Phase 6 improvements."""
 
-    @pytest.fixture
-    def preprocessor(self, monkeypatch):
+    @pytest.fixture(scope="session")
+    def preprocessor(self):
         """Initialize Preprocessor with real spaCy model."""
         return Preprocessor(model="en_core_web_md")
 
@@ -290,8 +290,8 @@ class TestHTMLParsingIntegration:
 class TestPerformanceMetrics:
     """Test performance metrics for Phase 6."""
 
-    @pytest.fixture
-    def preprocessor(self, monkeypatch):
+    @pytest.fixture(scope="session")
+    def preprocessor(self):
         """Initialize Preprocessor."""
         return Preprocessor(model="en_core_web_md")
 
@@ -341,8 +341,8 @@ class TestMarkdownDividerIntegration:
     immediately *before* each synthesized header, not after it.
     """
 
-    @pytest.fixture
-    def preprocessor(self, monkeypatch):
+    @pytest.fixture(scope="session")
+    def preprocessor(self):
         """Initialize Preprocessor with real spaCy model."""
         return Preprocessor(model="en_core_web_md")
 
