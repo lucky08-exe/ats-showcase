@@ -284,6 +284,7 @@ def _adjective_list_end(doc: Doc, comma: int) -> int | None:
             break
         if _is_plain_noun_head(doc, seg, run_end):
             best = run_end
+            break
         if closes:
             break
         cursor = run_end
@@ -297,19 +298,22 @@ def _coordinated_end(doc: Doc, head_end: int) -> int:
     """
     committed = head_end
     cursor = head_end
+    bare_comma_conjunct = False
     while cursor < len(doc):
         if doc[cursor].text == ",":
             # ", and X" / ", or X" commits; a bare ", X" is tentative.
             after_comma = cursor + 1
             commits = after_comma < len(doc) and _is_join_conjunction(doc[after_comma])
-            if not commits and cursor == head_end:
-                # Bare comma directly after the head, between premodifiers of one head (#557).
-                # Later bare commas are noun-conjunct punctuation (#509), not a new list.
-                list_end = _adjective_list_end(doc, cursor)
-                if list_end is not None:
-                    committed = list_end
-                    cursor = list_end
-                    continue
+            if not commits:
+                # A bare comma may open an adjective list at the head or after a
+                # conjunction-led conjunct (#557). Never after a bare noun conjunct (#509).
+                if not bare_comma_conjunct:
+                    list_end = _adjective_list_end(doc, cursor)
+                    if list_end is not None:
+                        committed = list_end
+                        cursor = list_end
+                        continue
+                bare_comma_conjunct = True
             run_start = after_comma + 1 if commits else after_comma
         elif _is_join_conjunction(doc[cursor]):
             commits = True
