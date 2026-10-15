@@ -3,7 +3,7 @@
 ## Scope
 
 - Records the decision on how broad the hyphen-compound rule for ambiguous tech terms should be.
-- Follow-up to #513 (rule introduced) and PR #549 (suffix allow-list added). Tracked under #268.
+- Follow-up to #513 (rule and suffix allow-list introduced in f080b7a, merged via PR #549). Tracked under #268.
 - Advisory. No real job-description text was available when this was written.
 
 ## The rule
