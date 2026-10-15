@@ -46,9 +46,6 @@ Multi-agent coordination framework for ATS Playground: role boundaries + escalat
 
 **Precedence:** Agent `.md` frontmatter > Global settings.json
 
-Haiku cuts cost ~60% vs Sonnet; sufficient for code review + synthesis.
-
-
 ---
 
 ## Two-Gate System
@@ -74,28 +71,17 @@ Reviewer verifies with local tools (not predictions): pytest ✅, ruff/black ✅
 ARCHITECT → BUILDER → REVIEWER → HUMAN (merge)
 ```
 
-**Approval gates:** Gate 1 (plan) before code → Gate 2 (verification) before merge
-
-
 ---
 
-## Directory Scoping Map
+## Directory Scoping & Skill Discovery
 
-`.claude/rules/*.md` phase guidance • `.claude/skills/<name>/SKILL.md` lazy-loaded Skill Discovery metadata • `.claude/agents/*.md` role overrides • `.github/copilot/rules/` Copilot IDE • `.github/instructions/` CLI docs.
-
-**Rule Priority**: Agent `.md` frontmatter > `.claude/settings.json` > GitHub defaults
+`.claude/rules/*.md` phase guidance • `.claude/agents/*.md` role overrides • `.claude/skills/<name>/SKILL.md` (lazy-loaded) • `.github/copilot/rules/` • `.github/instructions/` CLI docs. **Priority**: Agent `.md` > `.claude/settings.json` > defaults.
 
 ---
 
 ## Claude ↔ Copilot Handoff
 
-Copilot: single-file edits, quick fixes. Claude Code: multi-file refactors (>3 files), cross-module changes, complex planning/verification. **Escalation**: >3 files or touches `.claude/`, `AGENTS.md`, `CLAUDE.md`.
-
----
-
-## Skill Discovery
-
-Skills live in `.claude/skills/<name>/SKILL.md` (YAML metadata, lazy-loaded).
+Copilot: single-file edits. Claude Code: multi-file refactors (>3 files), cross-module changes. Escalate if >3 files or touches `.claude/`, `AGENTS.md`, `CLAUDE.md`.
 
 
 ---
@@ -121,4 +107,4 @@ Architect uses `code-review-graph` (MCP) for structural/blast-radius context bef
 
 **Related:** [CLAUDE.md](CLAUDE.md) • [DESIGN.md](DESIGN.md) • [multi-agent.md](.claude/rules/multi-agent.md) • [.claude/README.md](.claude/README.md)
 
-**Last Updated:** 2026-09-07 (Issue #328: swap better-code-review-graph → code-review-graph)
+**Last Updated:** 2026-10-14 (Issue #626: trim AGENTS.md to context budget)
