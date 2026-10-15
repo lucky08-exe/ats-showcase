@@ -107,8 +107,8 @@ See `.claude/rules/phase8/patterns.md` for patterns and edge cases.
 **Strategies (Issue #278):** boundary rules are injectable and a second, regex-only strategy exists. The `requirement_spans` dict shape is frozen.
 - `span_types.py`: frozen `BoundaryRules` (`hard_stops` `. ; ! ? )`, `soft_stops` `,`, `stop_words` `if unless because`), `DEFAULT_RULES`, `SpanPattern` (regex validated at construction), `SpanCategory`.
 - `span_categorizer.py`: boundary helpers take optional `rules` (default = previous hard-coded sets); `categorize_spans(doc, rules)`; `NLPSpanCategorizer`; `create_span_categorizer(strategy="nlp"|"custom", rules, patterns)`. The `span_categorizer` spaCy component is unchanged and uses defaults.
-- `custom_span_categorizer.py`: spaCy-free `CustomSpanCategorizer(patterns).categorize(text)`; `load_patterns(path)` JSON loader; `validate_pattern` (500-char cap, nested-quantifier ReDoS heuristic); 200k-char input bound. `SpanCategorizerComponent` is a thin, unregistered wrapper writing `doc._.custom_spans` (never `requirement_spans`).
-- Limits: ReDoS check is a heuristic (see #382); not yet exposed in CLI (#380) or registered as a spaCy factory (#381). Markdown strategy is tracked in #281.
+- `custom_span_categorizer.py`: spaCy-free `CustomSpanCategorizer(patterns).categorize(text)`; `load_patterns(path)` JSON loader; `validate_pattern` (500-char cap, nested-quantifier ReDoS heuristic); 200k-char input bound. `SpanCategorizerComponent` is a thin wrapper, registered as a spaCy pipeline factory (#618, "custom_span_categorizer") writing `doc._.custom_spans` (never `requirement_spans`).
+- Limits: ReDoS check is a heuristic (see #382). CLI: `--categorizer-strategy nlp|custom`, `--span-patterns <json>` (#380). Markdown strategy is tracked in #281.
 
 See `.claude/rules/phase8/span_algorithm.md` and `.claude/rules/phase8/performance.md`.
 
