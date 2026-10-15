@@ -1189,7 +1189,7 @@ class TestPerJobSourceConfigScoping:
 
         source_warnings = [w for w in results[0].warnings if w[0] == "source_config"]
         assert len(source_warnings) == 1
-        assert "could not be loaded" in source_warnings[0][1]
+        assert "could not be resolved" in source_warnings[0][1]
         assert "nope" in source_warnings[0][1]
         assert not results[0].has_errors()
 
@@ -1265,7 +1265,7 @@ class TestPerJobSourceConfigScoping:
         assert recorded_calls[0]["description_match"] == "first"
         source_warnings = [w for w in results[0].warnings if w[0] == "source_config"]
         assert len(source_warnings) == 1
-        assert "not resolved" in source_warnings[0][1]
+        assert "could not be resolved" in source_warnings[0][1]
         assert not results[0].has_errors()
 
     def test_null_name_company_with_unknown_source_config_does_not_abort(self, tmp_path, recorded_calls):
@@ -1301,7 +1301,7 @@ class TestPerJobSourceConfigScoping:
         ghost_result = next(r for r in results if r.job_id == "ghost")
         source_warnings = [w for w in ghost_result.warnings if w[0] == "source_config"]
         assert len(source_warnings) == 1
-        assert "not resolved" in source_warnings[0][1]
+        assert "could not be resolved" in source_warnings[0][1]
         assert not ghost_result.has_errors()
 
     def test_non_dict_company_value_degrades_to_unscoped_without_abort(self, tmp_path, recorded_calls):
@@ -1326,7 +1326,7 @@ class TestPerJobSourceConfigScoping:
         for result in results:
             source_warnings = [w for w in result.warnings if w[0] == "source_config"]
             assert len(source_warnings) == 1
-            assert "not resolved" in source_warnings[0][1]
+            assert "could not be resolved" in source_warnings[0][1]
             assert not result.has_errors()
 
     def test_list_description_selector_match_falls_back_to_first_without_abort(self, tmp_path):
