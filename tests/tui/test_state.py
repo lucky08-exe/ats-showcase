@@ -1,11 +1,35 @@
 """Tests for StateManager and related models."""
 
-import time
 from datetime import datetime, timedelta
+from typing import Any
 
 import pytest
 
 from src.tui.models.state import PhaseMetrics, PhaseStatus, StateManager
+
+
+class _FakeClock:
+    """Controllable replacement for datetime.now() in src.tui.models.state."""
+
+    def __init__(self) -> None:
+        self.current = datetime(2026, 1, 1, 12, 0, 0)
+
+    def advance(self, seconds: float) -> None:
+        self.current += timedelta(seconds=seconds)
+
+
+@pytest.fixture
+def fake_clock(monkeypatch: pytest.MonkeyPatch) -> _FakeClock:
+    """Patch PhaseMetrics' time source so elapsed time is deterministic."""
+    clock = _FakeClock()
+
+    class _FakeDatetime(datetime):
+        @classmethod
+        def now(cls, tz: Any = None) -> Any:
+            return clock.current
+
+    monkeypatch.setattr("src.tui.models.state.datetime", _FakeDatetime)
+    return clock
 
 
 class TestPhaseMetrics:
@@ -47,31 +71,31 @@ class TestPhaseMetrics:
         metrics = PhaseMetrics(start_time=None)
         assert metrics.elapsed_seconds == 0.0
 
-    def test_elapsed_seconds_running(self):
+    def test_elapsed_seconds_running(self, fake_clock):
         """Elapsed time calculated while phase running."""
-        start = datetime.now() - timedelta(seconds=5)
+        start = fake_clock.current
+        fake_clock.advance(5)
         metrics = PhaseMetrics(start_time=start, end_time=None)
-        elapsed = metrics.elapsed_seconds
-        assert 4 < elapsed < 6  # Allow small variance
+        assert metrics.elapsed_seconds == pytest.approx(5.0)
 
     def test_elapsed_seconds_completed(self):
         """Elapsed time uses end_time when phase complete."""
-        start = datetime.now() - timedelta(seconds=10)
+        start = datetime(2026, 1, 1, 12, 0, 0)
         end = start + timedelta(seconds=5)
         metrics = PhaseMetrics(start_time=start, end_time=end)
-        assert abs(metrics.elapsed_seconds - 5.0) < 0.1
+        assert metrics.elapsed_seconds == pytest.approx(5.0)
 
     def test_items_per_second_no_elapsed(self):
         """Speed is 0 when elapsed time is 0."""
         metrics = PhaseMetrics(start_time=None, processed_items=10)
         assert metrics.items_per_second == 0.0
 
-    def test_items_per_second_calculated(self):
+    def test_items_per_second_calculated(self, fake_clock):
         """Speed calculated correctly."""
-        start = datetime.now() - timedelta(seconds=2)
+        start = fake_clock.current
+        fake_clock.advance(2)
         metrics = PhaseMetrics(start_time=start, processed_items=10)
-        speed = metrics.items_per_second
-        assert 4 < speed < 6  # ~5 items/sec
+        assert metrics.items_per_second == pytest.approx(5.0)  # 10 items / 2s
 
     def test_eta_seconds_no_speed(self):
         """ETA is 0 when speed is 0."""
@@ -82,28 +106,29 @@ class TestPhaseMetrics:
         )
         assert metrics.eta_seconds == 0.0
 
-    def test_eta_seconds_calculated(self):
+    def test_eta_seconds_calculated(self, fake_clock):
         """ETA calculated correctly."""
-        start = datetime.now() - timedelta(seconds=10)
+        start = fake_clock.current
+        fake_clock.advance(10)
         metrics = PhaseMetrics(
             start_time=start,
             total_items=100,
             processed_items=10,
         )
-        eta = metrics.eta_seconds
         # Processed 10 in 10s = 1 item/sec, 90 remaining = 90s ETA
-        assert 80 < eta < 100  # Allow variance
+        assert metrics.eta_seconds == pytest.approx(90.0)
 
-    def test_eta_seconds_almost_done(self):
+    def test_eta_seconds_almost_done(self, fake_clock):
         """ETA is small when nearly complete."""
-        start = datetime.now() - timedelta(seconds=10)
+        start = fake_clock.current
+        fake_clock.advance(10)
         metrics = PhaseMetrics(
             start_time=start,
             total_items=100,
             processed_items=99,
         )
-        eta = metrics.eta_seconds
-        assert eta < 2  # Very small ETA
+        # Processed 99 in 10s = 9.9 items/sec, 1 remaining = ~0.101s ETA
+        assert metrics.eta_seconds == pytest.approx(1 / 9.9)
 
 
 class TestPhaseStatus:
