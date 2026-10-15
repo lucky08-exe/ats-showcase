@@ -309,7 +309,6 @@ def _coordinated_end(doc: Doc, head_end: int) -> int:
         _is_glued_hyphen(doc, cursor)
         and cursor + 2 < len(doc)
         and _is_amod_participle(doc[cursor + 1])
-        and doc[cursor + 1].tag_ == "VBN"
         and doc[cursor + 2].text == ","
     ):
         cursor += 2
