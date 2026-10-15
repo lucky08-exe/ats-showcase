@@ -1428,3 +1428,189 @@ class TestPerJobSourceConfigScoping:
         assert recorded["config_dir"] == str(config_dir)
         assert recorded["config_dir"] != "config_test"
         assert recorded["description_selector"] is None
+
+
+FIXTURE_PATH = Path(__file__).parent.parent / "fixtures" / "details_test_fixture.json"
+
+
+def _run_main(argv_tail: list) -> int:
+    """Invoke batch_processor.main() with the given CLI args (Issue #643 helper)."""
+    import sys
+
+    import src.poc.tweak.batch_processor as bp
+
+    old_argv = sys.argv
+    try:
+        sys.argv = ["batch_processor", *argv_tail]
+        return bp.main()
+    finally:
+        sys.argv = old_argv
+
+
+class TestBatchSentences:
+    """Tests for JobResult.sentences and the poc_sentence_splitter flag (Issue #643)."""
+
+    def test_sentences_are_nonempty_stripped_strings(self):
+        """Every sentence is a stripped, non-empty str; at least one job has sentences."""
+        # Act
+        results = run_batch(str(FIXTURE_PATH))
+
+        # Assert
+        for result in results:
+            assert isinstance(result.sentences, list)
+            for sentence in result.sentences:
+                assert isinstance(sentence, str)
+                assert sentence, f"{result.job_id}: empty sentence"
+                assert sentence == sentence.strip(), f"{result.job_id}: unstripped sentence {sentence!r}"
+        assert any(result.sentences for result in results), "Expected at least one job with sentences"
+
+    def test_null_description_job_has_empty_sentences(self, tmp_path):
+        """Null description yields sentences == [] with no per-job error."""
+        # Arrange
+        test_file = tmp_path / "null_description_sentences.json"
+        test_file.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "job1",
+                        "title": "Developer Position",
+                        "company": "TechCorp",
+                        "description": None,
+                    }
+                ]
+            )
+        )
+
+        # Act
+        results = run_batch(str(test_file))
+
+        # Assert
+        assert len(results) == 1
+        assert results[0].sentences == []
+        assert not results[0].has_errors(), f"Unexpected errors: {results[0].errors}"
+
+    def test_jobresult_without_sentences_defaults_to_empty_list(self):
+        """JobResult built without sentences gets [] and instances do not share the list."""
+        # Arrange / Act
+        first = JobResult(
+            job_id="a",
+            title="t",
+            company="c",
+            sections_detected=0,
+            keyword_matches=0,
+            confidence_min=0.0,
+            confidence_max=0.0,
+            confidence_avg=0.0,
+        )
+        second = JobResult(
+            job_id="b",
+            title="t",
+            company="c",
+            sections_detected=0,
+            keyword_matches=0,
+            confidence_min=0.0,
+            confidence_max=0.0,
+            confidence_avg=0.0,
+        )
+
+        # Assert
+        assert first.sentences == []
+        first.sentences.append("x")
+        assert second.sentences == [], "default_factory must not share the list between instances"
+
+    def test_main_output_json_includes_sentences_per_job(self, tmp_path):
+        """CLI --output-json export carries a sentences list for every job."""
+        # Arrange
+        out_file = tmp_path / "out.json"
+
+        # Act
+        exit_code = _run_main(["--input-path", str(FIXTURE_PATH), "--output-json", str(out_file)])
+
+        # Assert
+        assert exit_code == 0
+        entries = json.loads(out_file.read_text())
+        assert len(entries) == 4
+        for entry in entries:
+            assert isinstance(entry["sentences"], list)
+        assert any(entry["sentences"] for entry in entries)
+
+    def test_flag_on_adds_pipe_flag_off_omits_it(self, monkeypatch):
+        """Pipe is present by default and absent when enable_poc_sentence_splitter=False."""
+        import src.poc.tweak.batch_processor as bp
+
+        seen_pipes: list = []
+        original_process_job = bp.process_job
+
+        def recording_process_job(job, **kwargs):
+            seen_pipes.append(tuple(kwargs["nlp"].pipe_names))
+            return original_process_job(job, **kwargs)
+
+        monkeypatch.setattr(bp, "process_job", recording_process_job)
+
+        run_batch(str(FIXTURE_PATH))
+        assert seen_pipes, "process_job was not invoked"
+        assert all("poc_sentence_splitter" in names for names in seen_pipes)
+
+        seen_pipes.clear()
+        off_results = run_batch(str(FIXTURE_PATH), enable_poc_sentence_splitter=False)
+        assert seen_pipes, "process_job was not invoked"
+        assert all("poc_sentence_splitter" not in names for names in seen_pipes)
+        assert all(result.sentences == [] for result in off_results)
+
+    def test_cli_no_poc_sentences_leaves_sentences_empty(self, tmp_path):
+        """--no-poc-sentences yields empty sentences for every job in the JSON export."""
+        # Arrange
+        out_file = tmp_path / "out_off.json"
+
+        # Act
+        exit_code = _run_main(["--input-path", str(FIXTURE_PATH), "--output-json", str(out_file), "--no-poc-sentences"])
+
+        # Assert
+        assert exit_code == 0
+        entries = json.loads(out_file.read_text())
+        assert len(entries) == 4
+        assert all(entry["sentences"] == [] for entry in entries)
+
+    def test_flag_does_not_change_sections_or_requirements(self):
+        """Toggling the splitter leaves sections_detected and requirements counts unchanged."""
+        # Act
+        on_results = run_batch(str(FIXTURE_PATH))
+        off_results = run_batch(str(FIXTURE_PATH), enable_poc_sentence_splitter=False)
+
+        # Assert
+        on_by_id = {result.job_id: result for result in on_results}
+        assert len(off_results) == len(on_results)
+        for off in off_results:
+            on = on_by_id[off.job_id]
+            assert on.sections_detected == off.sections_detected, f"{off.job_id}: sections_detected differs"
+            assert len(on.requirements) == len(off.requirements), f"{off.job_id}: requirements count differs"
+
+    def test_heading_merges_into_following_sentence_known_limitation(self, tmp_path):
+        """Documents known limitation: a markdown heading glues onto the next sentence.
+
+        See the "Known limitations" section of src/poc/sentence_splitter.py
+        (a heading without terminal punctuation joins the following sentence).
+        """
+        # Arrange
+        test_file = tmp_path / "heading_sentences.json"
+        test_file.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "job1",
+                        "title": "Dev",
+                        "company": "Co",
+                        "description": "## Requirements\n\nYou must know Python.",
+                    }
+                ]
+            )
+        )
+
+        # Act
+        results = run_batch(str(test_file))
+
+        # Assert - known limitation: heading and sentence merge into ONE entry
+        sentences = results[0].sentences
+        assert len(sentences) == 1, f"Expected merged single entry, got {sentences!r}"
+        assert "Requirements" in sentences[0]
+        assert "You must know Python." in sentences[0]
