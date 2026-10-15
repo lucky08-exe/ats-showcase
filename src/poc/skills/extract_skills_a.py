@@ -269,11 +269,13 @@ def _is_plain_noun_head(doc: Doc, run_start: int, run_end: int) -> bool:
     return not (last - 1 >= run_start and _is_glued_hyphen(doc, last - 1))
 
 
-def _adjective_list_end(doc: Doc, comma: int) -> int | None:
+def _adjective_list_end(doc: Doc, comma: int, *, adverb_led: bool = False) -> int | None:
     """End (exclusive) of an adjective list after the bare comma at ``comma``, or None (#557).
 
     Returns the end of the last segment that is a plain noun head. None when the
     comma does not follow an adjectival modifier or no segment ends in a noun head.
+    ``adverb_led`` is set only by _adverb_led_list_end: there a skill-verb segment is
+    a verb, not a premodifier ("design fast, lead teams", #599).
     """
     if not _ends_adjectival_modifier(doc, comma):
         return None
@@ -285,6 +287,8 @@ def _adjective_list_end(doc: Doc, comma: int) -> int | None:
         if closes:
             seg += 1
         if seg >= len(doc) or not _is_adjectival(doc[seg]):
+            break
+        if adverb_led and doc[seg].lemma_ in _SKILL_VERB_SET:
             break
         run_end = _noun_run_end(doc, seg)
         if run_end is None:
@@ -302,13 +306,25 @@ def _adjective_list_end(doc: Doc, comma: int) -> int | None:
     return best
 
 
+# Verbs spaCy tags VERB that premodify a noun in an ADV-led list ("develop quickly, secure APIs").
+# Not skill verbs, so the Matcher never starts a match on them (#599).
+_ADVERB_LIST_VERB_ADJECTIVES = frozenset({"secure"})
+
+
 def _adverb_led_list_end(doc: Doc, start: int) -> int | None:
-    """End (exclusive) of a skill-verb head whose ADV first segment opens an adjective list (#588)."""
+    """End (exclusive) of a skill-verb head whose ADV first segment opens an adjective list (#588, #599)."""
     if start + 2 >= len(doc) or doc[start].pos_ != "VERB" or doc[start].lemma_ not in _SKILL_VERB_SET:
         return None
     if doc[start + 1].pos_ != "ADV" or doc[start + 2].text != ",":
         return None
-    return _adjective_list_end(doc, start + 2)
+    seg = start + 3
+    if seg < len(doc) and doc[seg].pos_ == "VERB" and doc[seg].lemma_ in _ADVERB_LIST_VERB_ADJECTIVES:
+        # Single verb-tagged premodifier before a noun head ("secure APIs").
+        run_end = _noun_run_end(doc, seg + 1)
+        if run_end is None or not _is_plain_noun_head(doc, seg + 1, run_end):
+            return None
+        return run_end
+    return _adjective_list_end(doc, start + 2, adverb_led=True)
 
 
 def _coordinated_end(doc: Doc, head_end: int) -> int:
