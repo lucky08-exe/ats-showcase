@@ -367,10 +367,11 @@ async def extract_job_from_container(
         container_index: Container index for debug logging
 
     Returns:
-        Dict with all 12 fields required for loader compatibility:
+        Dict with all 13 fields required for loader compatibility:
         id, title, company, location, url, description, requirements,
-        salary_min, salary_max, posted_date, crawled_at, status.
-        Returns None if extraction fails or title is missing.
+        salary_min, salary_max, posted_date, crawled_at, status, source_config.
+        source_config is the config dict key (company_key), not the extracted
+        display company. Returns None if extraction fails or title is missing.
     """
     try:
         # Debug logging at start of function
@@ -536,6 +537,7 @@ async def extract_job_from_container(
             "posted_date": posted_date,
             "crawled_at": crawled_at,
             "status": "pending_review",
+            "source_config": company_key,
         }
     except Exception as e:
         logger.warning(f"Container {container_index}: Error extracting job from container: {e}")
@@ -566,9 +568,9 @@ async def crawl_company_jobs(
         timeout_ms: Page navigation timeout in milliseconds
 
     Returns:
-        List of extracted job dicts with 12 fields:
+        List of extracted job dicts with 13 fields:
         id, title, company, location, url, description, requirements,
-        salary_min, salary_max, posted_date, crawled_at, status.
+        salary_min, salary_max, posted_date, crawled_at, status, source_config.
     """
     if not company_config.get("enabled", True):
         logger.info(f"Skipping disabled company: {company_key}")
