@@ -955,6 +955,22 @@ class TestSkillExtractorAdjectiveListComma:
             "design fault-tolerant, low-latency, scalable, secure services"
         ]
 
+    def test_glued_participle_compound_before_comma(self, extractor):
+        """A VBN glued compound before the comma ('data-driven,') opens the list (#585)."""
+        assert extractor.extract("You will design data-driven, scalable platforms.") == [
+            "design data-driven, scalable platforms"
+        ]
+
+    def test_participle_segment_before_comma(self, extractor):
+        """A participle segment ('distributed,') is an adjective, not a head (#585)."""
+        assert extractor.extract("You will design fault-tolerant, distributed, scalable services.") == [
+            "design fault-tolerant, distributed, scalable services"
+        ]
+
+    def test_noun_head_before_comma_guard_585(self, extractor):
+        """A noun before the comma keeps the #509 cut when a glued compound follows (#585 guard)."""
+        assert extractor.extract("You will design systems, low-latency platforms.") == ["design systems"]
+
 
 class TestSkillExtractorParticipialWith:
     """Past-tense/participle "built with <tech>" names a stack, not a skill (#551).

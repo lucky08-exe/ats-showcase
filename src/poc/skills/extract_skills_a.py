@@ -228,6 +228,8 @@ def _is_join_conjunction(tok: Token) -> bool:
 #   - the token before the comma is adjectival: an ADJ, an amod participle, or a glued
 #     compound whose first half is one ("high-performance", "data-driven");
 #   - the comma list continues through ADJ-led segments and ends at a plain noun head.
+# A participle segment before a comma ("distributed," in "fault-tolerant, distributed,
+# scalable services") is an adjective segment (#585); a VBN compound ("data-driven,") counts as adjectival.
 # A segment is a plain head only when its last token is a NOUN/PROPN not glued to a
 # hyphen before it, so "low-latency" alone is not a head and "low-latency services" is.
 # A noun before the comma ("design systems, platform teams") keeps the #509 rule.
@@ -281,7 +283,11 @@ def _adjective_list_end(doc: Doc, comma: int) -> int | None:
             break
         run_end = _noun_run_end(doc, seg)
         if run_end is None:
-            break
+            # A participle adjective before a comma ("distributed," #585) is a segment, not a head.
+            if closes or seg + 1 >= len(doc) or doc[seg + 1].text != ",":
+                break
+            cursor = seg + 1
+            continue
         if _is_plain_noun_head(doc, seg, run_end):
             best = run_end
             break
@@ -298,6 +304,15 @@ def _coordinated_end(doc: Doc, head_end: int) -> int:
     """
     committed = head_end
     cursor = head_end
+    # A glued participle compound before a comma ("data-driven,") opens an adjective list (#585).
+    if (
+        _is_glued_hyphen(doc, cursor)
+        and cursor + 2 < len(doc)
+        and _is_amod_participle(doc[cursor + 1])
+        and doc[cursor + 1].tag_ == "VBN"
+        and doc[cursor + 2].text == ","
+    ):
+        cursor += 2
     bare_comma_conjunct = False
     while cursor < len(doc):
         if doc[cursor].text == ",":
