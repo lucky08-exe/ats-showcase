@@ -467,18 +467,26 @@ def run_batch(
     description_selector: Optional[str] = None,
     description_match: str = "first",
     promote_headings: bool = True,
+    config_dir: str = "config_test",
 ) -> List[JobResult]:
     """Run batch processing on all jobs in input file.
 
     Loads spaCy model, instantiates pipeline components once, then processes
     all jobs sequentially through the pipeline.
 
+    When ``description_selector`` is None, each job's selector and match strategy
+    are resolved from its ``source_config`` key (Issue #376). A global
+    ``description_selector`` (e.g. from ``--company``) overrides this for all jobs.
+
     Args:
         input_path: Path to JSON file with job records
-        description_selector: Optional CSS selector to scope HTML fragments
+        description_selector: Optional CSS selector to scope HTML fragments. When set,
+                          applies to every job and disables per-job resolution.
         description_match: Strategy for multi-match selection ("first", "all", "longest").
-                          Default "first".
+                          Default "first". Only used with a global description_selector.
         promote_headings: Whether to promote plain-text headings (default True, Issue #365)
+        config_dir: Directory of company config JSON files used to resolve per-job
+                          selectors from ``source_config`` (default "config_test")
 
     Returns:
         List of JobResult objects (one per job)
@@ -523,7 +531,20 @@ def run_batch(
 
     # Process all jobs
     results = []
+    # Cache of source_config -> (selector, match, error) so each company config is loaded once
+    scoping_cache: Dict[str, Tuple[Optional[str], str, Optional[str]]] = {}
     for job in jobs:
+        job_selector = description_selector
+        job_match = description_match
+        resolve_error: Optional[str] = None
+        source_config = job.get("source_config")
+        if description_selector is None and source_config:
+            # Per-job scoping from source_config (Issue #376); --company (global) still wins above
+            key = str(source_config)
+            if key not in scoping_cache:
+                scoping_cache[key] = _resolve_job_scoping(key, config_dir)
+            job_selector, job_match, resolve_error = scoping_cache[key]
+
         result = process_job(
             job,
             nlp=nlp,
@@ -535,10 +556,13 @@ def run_batch(
             req_processor=req_processor,
             skill_processor=skill_processor,
             tech_processor=tech_processor,
-            description_selector=description_selector,
-            description_match=description_match,
+            description_selector=job_selector,
+            description_match=job_match,
             heading_promoter=heading_promoter,
         )
+        if resolve_error is not None:
+            # Unknown/invalid source_config: process job unscoped (as before), record a warning
+            result.add_warning("source_config", resolve_error)
         results.append(result)
 
     return results
@@ -707,6 +731,21 @@ def _resolve_description_match(company: str, config_dir: str) -> str:
 
     # Return the strategy value, or "first" if key is absent
     return selectors.get("description_selector_match", "first")
+
+
+def _resolve_job_scoping(source_config: str, config_dir: str) -> Tuple[Optional[str], str, Optional[str]]:
+    """Resolve (description_selector, description_match, error) for one source_config key (Issue #376).
+
+    Never raises. On resolver ValueError (unknown key or missing selector) returns
+    (None, "first", message) so the job is processed unscoped, matching the
+    no-source_config default; the caller records the message as a warning.
+    """
+    try:
+        selector = _resolve_description_selector(source_config, config_dir)
+        match = _resolve_description_match(source_config, config_dir)
+    except ValueError as e:
+        return None, "first", f"source_config '{source_config}' not resolved; processing full HTML: {e}"
+    return selector, match, None
 
 
 def main() -> int:

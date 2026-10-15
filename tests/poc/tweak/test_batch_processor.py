@@ -1020,3 +1020,158 @@ class TestCLIFlags:
         # (which is the lazy import behavior)
         # This test just documents that config_test is the default
         assert True  # Placeholder; actual behavior verified by CLI tests above
+
+
+class TestPerJobSourceConfigScoping:
+    """Tests for per-record description_selector resolution from source_config (Issue #376)."""
+
+    @staticmethod
+    def _write_config_dir(tmp_path):
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "companies.json").write_text(
+            json.dumps(
+                {
+                    "companies": {
+                        "AlphaCo": {
+                            "name": "Alpha Co",
+                            "selectors": {
+                                "description_selector": ".alpha-desc",
+                                "description_selector_match": "longest",
+                            },
+                        },
+                        "BetaCo": {
+                            "name": "Beta Co",
+                            "selectors": {"description_selector": ".beta-desc"},
+                        },
+                    }
+                }
+            )
+        )
+        return config_dir
+
+    @staticmethod
+    def _write_jobs(tmp_path, records):
+        input_file = tmp_path / "jobs.json"
+        input_file.write_text(json.dumps(records))
+        return input_file
+
+    @staticmethod
+    def _record(job_id, source_config=None, present=True):
+        record = {"id": job_id, "title": "Dev", "company": "X", "description": "<p>placeholder</p>"}
+        if present:
+            record["source_config"] = source_config
+        return record
+
+    @pytest.fixture
+    def recorded_calls(self, monkeypatch):
+        """Replace process_job with a recorder that returns a minimal JobResult (no pipeline work)."""
+        from src.poc.tweak import batch_processor as bp
+
+        calls = []
+
+        def fake_process_job(job, **kwargs):
+            calls.append({"job_id": job["id"], **kwargs})
+            return JobResult(
+                job_id=job["id"],
+                title="Dev",
+                company="X",
+                sections_detected=0,
+                keyword_matches=0,
+                confidence_min=0.0,
+                confidence_max=0.0,
+                confidence_avg=0.0,
+            )
+
+        monkeypatch.setattr(bp, "process_job", fake_process_job)
+        return calls
+
+    def test_mixed_source_config_each_job_gets_its_own_selector(self, tmp_path, recorded_calls):
+        """Two companies in one input, no global override: each job receives its own company's selector/match."""
+        config_dir = self._write_config_dir(tmp_path)
+        input_file = self._write_jobs(
+            tmp_path,
+            [
+                self._record("a1", "AlphaCo"),
+                self._record("b1", "BetaCo"),
+                self._record("a2", "AlphaCo"),
+            ],
+        )
+
+        run_batch(str(input_file), config_dir=str(config_dir))
+
+        by_id = {c["job_id"]: c for c in recorded_calls}
+        assert by_id["a1"]["description_selector"] == ".alpha-desc"
+        assert by_id["a1"]["description_match"] == "longest"
+        assert by_id["a2"]["description_selector"] == ".alpha-desc"
+        assert by_id["a2"]["description_match"] == "longest"
+        assert by_id["b1"]["description_selector"] == ".beta-desc"
+        assert by_id["b1"]["description_match"] == "first"
+
+    def test_global_description_selector_overrides_all_jobs(self, tmp_path, recorded_calls):
+        """A global description_selector (--company path) wins for every job, regardless of source_config."""
+        config_dir = self._write_config_dir(tmp_path)
+        input_file = self._write_jobs(
+            tmp_path,
+            [self._record("a1", "AlphaCo"), self._record("b1", "BetaCo")],
+        )
+
+        run_batch(
+            str(input_file),
+            description_selector=".global-desc",
+            description_match="all",
+            config_dir=str(config_dir),
+        )
+
+        assert len(recorded_calls) == 2
+        for call in recorded_calls:
+            assert call["description_selector"] == ".global-desc"
+            assert call["description_match"] == "all"
+
+    def test_records_without_source_config_keep_defaults(self, tmp_path, recorded_calls):
+        """Missing key, None, and empty string all keep the old defaults (None selector, 'first' match)."""
+        config_dir = self._write_config_dir(tmp_path)
+        input_file = self._write_jobs(
+            tmp_path,
+            [
+                self._record("missing", present=False),
+                self._record("none", None),
+                self._record("empty", ""),
+            ],
+        )
+
+        run_batch(str(input_file), config_dir=str(config_dir))
+
+        assert len(recorded_calls) == 3
+        for call in recorded_calls:
+            assert call["description_selector"] is None
+            assert call["description_match"] == "first"
+
+    def test_unknown_source_config_degrades_to_unscoped_with_warning(self, tmp_path, recorded_calls):
+        """Unknown source_config: batch continues, job gets defaults, and a source_config warning is recorded.
+
+        Mirrors the existing resolver behaviour (ValueError 'No configuration found'), captured per job.
+        """
+        config_dir = self._write_config_dir(tmp_path)
+        input_file = self._write_jobs(
+            tmp_path,
+            [self._record("ghost", "NoSuchCo"), self._record("alpha", "AlphaCo")],
+        )
+
+        results = run_batch(str(input_file), config_dir=str(config_dir))
+
+        assert len(results) == 2
+        by_id = {c["job_id"]: c for c in recorded_calls}
+        assert by_id["ghost"]["description_selector"] is None
+        assert by_id["ghost"]["description_match"] == "first"
+        assert by_id["alpha"]["description_selector"] == ".alpha-desc"
+
+        ghost_result = next(r for r in results if r.job_id == "ghost")
+        source_warnings = [w for w in ghost_result.warnings if w[0] == "source_config"]
+        assert len(source_warnings) == 1
+        assert "NoSuchCo" in source_warnings[0][1]
+        assert "No configuration found" in source_warnings[0][1]
+        assert not ghost_result.has_errors()
+
+        alpha_result = next(r for r in results if r.job_id == "alpha")
+        assert not [w for w in alpha_result.warnings if w[0] == "source_config"]
