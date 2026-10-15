@@ -696,3 +696,51 @@ class TestTechKeywordAdjExemption:
             )
             is True
         )
+
+
+class TestPocSentenceSplitterWiring:
+    """Issue #638 Sub-issue B: POC sentence splitter flag wiring (model-free, blank pipeline)."""
+
+    @staticmethod
+    def _blank_nlp_with_sentencizer():
+        """Blank English pipeline with a sentencizer so doc.sents works without en_core_web_md."""
+        import spacy
+
+        nlp = spacy.blank("en")
+        nlp.add_pipe("sentencizer")
+        return nlp
+
+    @pytest.fixture
+    def blank_spacy_load(self, monkeypatch):
+        """Patch spacy.load to return a model-free blank pipeline (#631 stubbing pattern)."""
+        monkeypatch.setattr("spacy.load", lambda model: self._blank_nlp_with_sentencizer())
+
+    def test_poc_splitter_pipe_added_by_default(self, blank_spacy_load):
+        """Default-constructed Preprocessor registers poc_sentence_splitter on its pipeline."""
+        preprocessor = Preprocessor(extract_requirements=False)
+        assert preprocessor.enable_poc_sentence_splitter is True
+        assert preprocessor.nlp is not None
+        assert "poc_sentence_splitter" in preprocessor.nlp.pipe_names
+
+    def test_poc_splitter_pipe_absent_when_flag_off(self, blank_spacy_load):
+        """enable_poc_sentence_splitter=False keeps the pipe out and segment_sentences_poc returns []."""
+        preprocessor = Preprocessor(extract_requirements=False, enable_poc_sentence_splitter=False)
+        assert preprocessor.nlp is not None
+        assert "poc_sentence_splitter" not in preprocessor.nlp.pipe_names
+        doc = preprocessor.nlp("Must know Python. Knows SQL too.")
+        assert preprocessor.segment_sentences_poc(doc) == []
+
+    def test_segment_sentences_identical_flag_on_vs_off(self, blank_spacy_load):
+        """Existing segment_sentences() output is unchanged by the POC pipe."""
+        text = "Requires 5+ years MES. Must know\nWonderware. Dr. Smith leads the team!"
+        on = Preprocessor(extract_requirements=False, enable_poc_sentence_splitter=True)
+        off = Preprocessor(extract_requirements=False, enable_poc_sentence_splitter=False)
+        assert on.segment_sentences(text) == off.segment_sentences(text)
+        assert on.segment_sentences(text)  # non-empty, so the comparison is meaningful
+
+    def test_segment_sentences_poc_returns_regex_split_when_on(self, blank_spacy_load):
+        """With the flag on, segment_sentences_poc returns the regex split (newline inside a sentence kept)."""
+        preprocessor = Preprocessor(extract_requirements=False)
+        assert preprocessor.nlp is not None
+        doc = preprocessor.nlp("Must know\nPython. Knows SQL! Also Go?")
+        assert preprocessor.segment_sentences_poc(doc) == ["Must know\nPython.", "Knows SQL!", "Also Go?"]

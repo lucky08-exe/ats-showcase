@@ -90,6 +90,7 @@ class Preprocessor:
         section_engine: Optional[SectionDetector] = None,
         categorizer_strategy: str = "nlp",
         span_patterns_path: str | None = None,
+        enable_poc_sentence_splitter: bool = True,
     ):
         """Initialize preprocessor with spaCy model.
 
@@ -102,6 +103,9 @@ class Preprocessor:
             categorizer_strategy: "nlp" (POS/DEP span categorizer, default) or "custom"
                           (regex patterns from span_patterns_path, written to doc._.custom_spans)
             span_patterns_path: Path to patterns JSON; required when categorizer_strategy is "custom"
+            enable_poc_sentence_splitter: Add the regex-only POC sentence splitter pipe (#638).
+                          Default True adds "poc_sentence_splitter" to nlp.pipe_names. The
+                          existing segment_sentences() output is unaffected.
 
         Raises:
             ValueError: Unknown strategy, "custom" without span_patterns_path, or invalid patterns.
@@ -117,6 +121,7 @@ class Preprocessor:
         self.preserve_requirement_spans = preserve_requirement_spans
         self.section_engine = section_engine
         self.categorizer_strategy = categorizer_strategy
+        self.enable_poc_sentence_splitter = enable_poc_sentence_splitter
         self.nlp: Optional[Language] = None
         self._custom_span_component: Any = None
         if categorizer_strategy == "custom":
@@ -203,6 +208,15 @@ class Preprocessor:
                 )
                 self.extract_requirements = False
 
+        # POC regex-only sentence splitter (Issue #638). Additive: writes only doc._.poc_sentences.
+        if self.enable_poc_sentence_splitter:
+            # Import registers the factory via decorator
+            import src.poc.sentence_splitter  # noqa: F401
+
+            if "poc_sentence_splitter" not in self.nlp.pipe_names:
+                self.nlp.add_pipe("poc_sentence_splitter")
+                logger.info("Added poc_sentence_splitter component to pipeline")
+
     def segment_sentences(self, text: str) -> List[str]:
         """Split text into sentences using spaCy sentence segmentation.
 
@@ -229,6 +243,19 @@ class Preprocessor:
         except Exception as e:
             logger.error(f"Error segmenting sentences: {e}")
             return []
+
+    def segment_sentences_poc(self, doc: Doc) -> List[str]:
+        """Return sentences produced by the POC regex splitter (Issue #638).
+
+        Args:
+            doc: spaCy Doc already processed by self.nlp
+
+        Returns:
+            doc._.poc_sentences, or [] if the flag is off or the component did not run.
+        """
+        if not self.enable_poc_sentence_splitter:
+            return []
+        return list(doc._.poc_sentences or [])
 
     def extract_entities(self, text: str) -> Tuple[List[str], List[str], List[str]]:
         """Extract named entities (skills, technologies, requirements).
