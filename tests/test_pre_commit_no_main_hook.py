@@ -1,12 +1,14 @@
 """Tests for .claude/hooks/pre-commit-no-main.sh (issues #593, #597).
 
 Each test builds throwaway git repositories under tmp_path and runs the hook
-with a repository as cwd. The real checkout is never touched.
+with a repository as cwd. The real checkout is never touched. No test runs a
+real `git commit`; the hook only inspects the command text and the branch.
 """
 
 import json
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -64,6 +66,14 @@ def _bash_input(command: str) -> str:
             "tool_input": {"command": command},
         }
     )
+
+
+def _nested_substitution(depth: int, inner: str) -> str:
+    """Wrap ``inner`` in ``depth`` levels of double-quoted command substitution."""
+    command = inner
+    for _ in range(depth):
+        command = f'echo "$({command})"'
+    return command
 
 
 def test_non_commit_command_on_main_is_allowed(repo: Path) -> None:
@@ -192,6 +202,189 @@ def test_commit_forms_are_blocked_on_main(repo: Path, command: str) -> None:
     assert BLOCK_MESSAGE in result.stderr
 
 
+@pytest.mark.parametrize(
+    "command",
+    [
+        "echo x | xargs -s 100 git commit",
+        "echo x | xargs -E EOF git commit",
+        "echo x | xargs -n 1 git commit -m x",
+        "echo x | xargs -rn1 git commit -m x",
+        "echo x | xargs -P 2 -I {} git commit -m {}",
+        "echo x | xargs -e git commit -m x",
+        "echo x | xargs -i git commit -m x",
+        "echo x | xargs -l git commit -m x",
+        "echo x | xargs --max-args 1 git commit -m x",
+        "echo x | xargs --max-args=1 git commit -m x",
+        "echo x | xargs -- git commit -m x",
+    ],
+    ids=[
+        "separate-s-value",
+        "separate-E-value",
+        "separate-n-value",
+        "bundled-rn-value",
+        "separate-P-and-I-values",
+        "attached-only-e",
+        "attached-only-i",
+        "attached-only-l",
+        "long-separate-value",
+        "long-attached-value",
+        "double-dash-end",
+    ],
+)
+def test_xargs_option_values_do_not_hide_git_commit(repo: Path, command: str) -> None:
+    result = _run_hook(repo, _bash_input(command))
+
+    assert result.returncode == 2
+    assert BLOCK_MESSAGE in result.stderr
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "echo x | xargs -s 100 git status",
+        "echo git | xargs -I {} echo commit",
+    ],
+    ids=["value-swallowed-then-status", "git-is-argument-of-echo"],
+)
+def test_xargs_non_commit_commands_are_allowed(repo: Path, command: str) -> None:
+    result = _run_hook(repo, _bash_input(command))
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "nice -n 5 git commit -m x",
+        "nice -10 git commit -m x",
+        "nice --adjustment 5 git commit -m x",
+        "timeout 5 git commit -m x",
+        "timeout -s KILL 5 git commit -m x",
+        "timeout -k 1 5 git commit -m x",
+        "stdbuf -oL git commit -m x",
+        "stdbuf -o L git commit -m x",
+        "setsid git commit -m x",
+        "ionice -c 2 -n 4 git commit -m x",
+        "find . -maxdepth 0 -exec git commit -m x \\;",
+        "find . -execdir git commit -m x {} +",
+    ],
+    ids=[
+        "nice-n-value",
+        "nice-attached-digits",
+        "nice-long-value",
+        "timeout-duration",
+        "timeout-signal-value",
+        "timeout-kill-after-value",
+        "stdbuf-attached-mode",
+        "stdbuf-separate-mode",
+        "setsid",
+        "ionice-class-and-level",
+        "find-exec-escaped-semicolon",
+        "find-execdir-plus",
+    ],
+)
+def test_wrapper_forms_are_blocked_on_main(repo: Path, command: str) -> None:
+    result = _run_hook(repo, _bash_input(command))
+
+    assert result.returncode == 2
+    assert BLOCK_MESSAGE in result.stderr
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "nice -n 5 ls",
+        "timeout 5 ls",
+        "find . -exec ls {} \\;",
+        "find . -name git",
+    ],
+    ids=["nice-non-commit", "timeout-non-commit", "find-exec-ls", "find-name-git"],
+)
+def test_wrapper_non_commit_commands_are_allowed(repo: Path, command: str) -> None:
+    result = _run_hook(repo, _bash_input(command))
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        'echo "$(git commit -m x)"',
+        'x="$(git commit -m y)"',
+        'echo "`git commit -m x`"',
+        'echo "$(echo "$(git commit -m x)")"',
+    ],
+    ids=["dollar-paren", "assignment", "backticks", "nested-in-substitution"],
+)
+def test_command_substitution_in_double_quotes_is_blocked_on_main(repo: Path, command: str) -> None:
+    result = _run_hook(repo, _bash_input(command))
+
+    assert result.returncode == 2
+    assert BLOCK_MESSAGE in result.stderr
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "echo '$(git commit -m x)'",
+        'echo "\\$(git commit -m x)"',
+        'echo "\\`git commit -m x\\`"',
+        'echo "$(ls docs/)"',
+    ],
+    ids=["single-quoted", "escaped-dollar", "escaped-backtick", "substitution-without-commit"],
+)
+def test_substitution_text_that_is_not_run_is_allowed(repo: Path, command: str) -> None:
+    result = _run_hook(repo, _bash_input(command))
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "# note; git commit -m x",
+        "ls # git commit -m x",
+    ],
+    ids=["comment-line", "trailing-comment"],
+)
+def test_comment_text_is_not_a_commit(repo: Path, command: str) -> None:
+    result = _run_hook(repo, _bash_input(command))
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+
+
+def test_git_commit_on_line_after_comment_is_blocked(repo: Path) -> None:
+    result = _run_hook(repo, _bash_input("# note\ngit commit -m x"))
+
+    assert result.returncode == 2
+    assert BLOCK_MESSAGE in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("depth", "inner", "expected_code"),
+    [
+        (5, "git commit -m x", 2),
+        (40, "git commit -m x", 2),
+        (40, "ls", 0),
+    ],
+    ids=["depth-5-commit", "depth-40-commit-fails-closed", "depth-40-no-commit"],
+)
+def test_deep_nesting_is_capped_and_fails_closed_on_main(
+    repo: Path, depth: int, inner: str, expected_code: int
+) -> None:
+    result = _run_hook(repo, _bash_input(_nested_substitution(depth, inner)))
+
+    assert result.returncode == expected_code
+    if expected_code == 2:
+        assert BLOCK_MESSAGE in result.stderr
+    else:
+        assert result.stderr == ""
+
+
 def test_long_option_then_C_targets_other_dir(tmp_path: Path) -> None:
     """`-C` after a long option selects the checked directory, not the cwd."""
     cwd_repo = _init_repo(tmp_path / "cwd", "feat/issue-597-cwd")
@@ -252,7 +445,7 @@ def test_quoted_C_dir_selects_branch_of_that_directory(
         assert result.stderr == ""
 
 
-def test_DIR_RE_is_anchored_to_command_position(tmp_path: Path) -> None:
+def test_git_C_inside_quoted_echo_does_not_select_directory(tmp_path: Path) -> None:
     """A -C inside quoted text must not select the directory checked.
 
     The first `git -C` is inside an echo argument pointing at a main checkout.
@@ -266,6 +459,24 @@ def test_DIR_RE_is_anchored_to_command_position(tmp_path: Path) -> None:
 
     assert result.returncode == 0
     assert result.stderr == ""
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "echo " + "a" * 1_000_000,
+        "echo " + "word " * 200_000,
+        'echo "' + "a" * 1_000_000 + '"',
+    ],
+    ids=["single-word", "many-words", "double-quoted"],
+)
+def test_one_megabyte_command_finishes_quickly(repo: Path, command: str) -> None:
+    start = time.monotonic()
+    result = _run_hook(repo, _bash_input(command))
+    elapsed = time.monotonic() - start
+
+    assert result.returncode == 0
+    assert elapsed < 10
 
 
 def test_python3_missing_fails_open_with_warning(tmp_path: Path) -> None:
