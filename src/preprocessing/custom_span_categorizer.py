@@ -10,6 +10,7 @@ import json
 import re
 from pathlib import Path
 
+from spacy.language import Language
 from spacy.tokens import Doc
 
 from src.preprocessing.span_types import (
@@ -107,6 +108,62 @@ def _has_overlapping_repeated_alternation(pattern: str) -> bool:
     return False
 
 
+def _has_quantified_group_wrapper(pattern: str) -> bool:
+    """Scan pattern for a repeated group whose body ends in a quantified atom.
+
+    Catches multi-level wrappers the single-``)`` nested-quantifier regex
+    misses, e.g. ``((a+))+``. Each open group tracks whether its last item
+    is quantified: directly (``a+``), or as a closed group whose own body
+    ends quantified. An alternation counts if any branch ends quantified.
+    Escapes, character classes and group headers are skipped as in
+    ``_has_overlapping_repeated_alternation``. Never raises.
+    """
+    # Each frame: [last item quantified, an earlier alternation branch was]
+    frames: list[list[bool]] = [[False, False]]
+    n = len(pattern)
+    i = 0
+    while i < n:
+        ch = pattern[i]
+        if ch == "\\":
+            frames[-1][0] = False
+            i += 2
+            continue
+        if ch == "[":
+            frames[-1][0] = False
+            i = _skip_char_class(pattern, i)
+            continue
+        if ch == "(":
+            header = _GROUP_HEADER.match(pattern, i + 1)
+            i = header.end() if header else i + 1
+            frames.append([False, False])
+            continue
+        if ch == "|":
+            top = frames[-1]
+            top[1] = top[1] or top[0]
+            top[0] = False
+        elif ch == ")" and len(frames) > 1:
+            last, earlier = frames.pop()
+            body_quantified = last or earlier
+            repeat = _REPEAT_AFTER_GROUP.match(pattern, i + 1)
+            if repeat is not None and body_quantified:
+                return True
+            # The closed group is a quantified item if it is repeated, and
+            # otherwise carries its body's quantified-ness to the parent.
+            frames[-1][0] = body_quantified or repeat is not None
+        else:
+            repeat = _REPEAT_AFTER_GROUP.match(pattern, i)
+            if repeat is not None:
+                frames[-1][0] = True
+                i = repeat.end()
+                continue
+            # A bare "?" is not a repeat and does not change the flag: it
+            # follows an atom or group whose state is already recorded.
+            if ch != "?":
+                frames[-1][0] = False
+        i += 1
+    return False
+
+
 def validate_pattern(pattern: str) -> None:
     """Validate regex pattern for safety and correctness.
 
@@ -129,9 +186,9 @@ def validate_pattern(pattern: str) -> None:
       - Ambiguity across sibling groups, e.g. (a|b)*(a|b)*, is not detected.
       - Escaped metacharacters are compared as written, so (\\.|.)+ is
         not detected.
-      - The pre-existing nested-quantifier check misses multi-level wrappers
-        separated by more than one ``)``: ``((a+))+`` is accepted (inherited
-        from main, not introduced here); ``(a+)+`` and ``((a*)*)+`` are rejected.
+      - Only the last item of a group body decides whether the body ends in
+        a quantifier, so a repeated group with a trailing optional atom is
+        accepted, e.g. (a+c?)+. A bare ``?`` is not a repeat, e.g. (a?)+.
       - A ``(?i`` flag anywhere in the pattern (including a scoped ``(?i:...)``)
         enables case-insensitive branch comparison for every group in the
         pattern, which can over-reject.
@@ -149,6 +206,7 @@ def validate_pattern(pattern: str) -> None:
         >>> validate_pattern("a+?b")  # OK (lazy quantifier)
         >>> validate_pattern("(a+)+")  # Raises ValueError (ReDoS)
         >>> validate_pattern("(a|aa)+")  # Raises ValueError (ReDoS)
+        >>> validate_pattern("((a+))+")  # Raises ValueError (ReDoS)
     """
     if len(pattern) > MAX_PATTERN_LENGTH:
         raise ValueError(f"Pattern exceeds max length {MAX_PATTERN_LENGTH}: {len(pattern)}")
@@ -166,6 +224,10 @@ def validate_pattern(pattern: str) -> None:
     # Check for repeated groups with overlapping alternation branches
     if _has_overlapping_repeated_alternation(pattern):
         raise ValueError(f"Pattern contains ReDoS-prone overlapping alternation: {pattern}")
+
+    # Check for repeated groups whose body ends in a quantified atom, at any depth
+    if _has_quantified_group_wrapper(pattern):
+        raise ValueError(f"Pattern contains ReDoS-prone nested quantifiers: {pattern}")
 
     try:
         re.compile(pattern)
@@ -388,6 +450,28 @@ class SpanCategorizerComponent:
 
         doc._.custom_spans = spans_list
         return doc
+
+
+@Language.factory("custom_span_categorizer", default_config={"patterns_path": None})
+def create_custom_span_categorizer_component(
+    nlp: Language, name: str, patterns_path: str | None
+) -> SpanCategorizerComponent:
+    """Build a SpanCategorizerComponent from a JSON patterns file.
+
+    Args:
+        nlp: Owning spaCy pipeline (unused, required by factory protocol).
+        name: Component name in the pipeline (unused).
+        patterns_path: Path to patterns JSON (see load_patterns).
+
+    Returns:
+        SpanCategorizerComponent writing doc._.custom_spans.
+
+    Raises:
+        ValueError: If patterns_path is missing or None.
+    """
+    if not patterns_path:
+        raise ValueError("custom_span_categorizer factory requires 'patterns_path' config")
+    return SpanCategorizerComponent(CustomSpanCategorizer(load_patterns(patterns_path)))
 
 
 __all__ = [

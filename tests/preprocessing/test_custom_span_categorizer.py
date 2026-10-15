@@ -6,13 +6,16 @@ pattern loading, and spaCy component integration.
 
 from __future__ import annotations
 
+import importlib
 import json
 from pathlib import Path
 
 import pytest
 import spacy
+from spacy.language import Language
 from spacy.tokens import Doc
 
+import src.preprocessing.custom_span_categorizer as custom_module
 from src.preprocessing.custom_span_categorizer import (
     MAX_PATTERN_LENGTH,
     MAX_TEXT_LENGTH,
@@ -164,6 +167,68 @@ class TestValidatePatternAlternationOverlap:
 
         with pytest.raises(ValueError, match="ReDoS"):
             CustomSpanCategorizer(patterns)
+
+
+class TestValidatePatternMultiLevelWrapper:
+    """Tests for repeated groups whose body ends in a quantified atom.
+
+    The single-``)`` nested-quantifier regex misses wrappers with two or more
+    closing parens between the inner and outer quantifier. The group-stack
+    scanner catches them at any depth. Neighbours (escaped parens, character
+    classes, unrepeated or exact-count groups) must still pass.
+    """
+
+    @pytest.mark.parametrize(
+        "pattern",
+        [
+            "((a+))+",
+            "(((a+)))*",
+            "(?:(?:a+))+",
+            "((((a+))))*",
+            "((a+)?)+",
+            "(x(a+))+",
+            "(b|a+)+",
+        ],
+    )
+    def test_multi_level_wrapper_rejected(self, pattern: str) -> None:
+        """Repeated groups whose body ends quantified at any depth should raise."""
+        with pytest.raises(ValueError, match="ReDoS"):
+            validate_pattern(pattern)
+
+    @pytest.mark.parametrize(
+        "pattern",
+        [
+            # Must-pass set: no nested quantifier, or quantifier not in a repeated group
+            "(a+)b+",
+            "(ab)+",
+            "(a|b)+",
+            "a+b",
+            "a+?b",
+            # Escaped parens are literals, so the outer + does not repeat a group
+            r"\(a+\)+",
+            # Quantifier characters inside a class are not quantifiers
+            "[a+]+",
+            # Body ends in an escaped literal paren, not a group close
+            r"(a+\))+",
+            # Class holding ')' must not close the group early; body ends in literal a
+            "([)]+a)+",
+            # Class holding '(' must not open a group
+            "([(]a)+",
+            # Escaped quantifier is a literal, not a quantified atom
+            r"((a\+))+",
+            # Body ends in a literal after the quantified atom
+            "((a+)b)+",
+            # Wrapper without an outer repeat
+            "((a+))",
+            # Exact count is not a repeat (matches the existing {n} policy)
+            "((a+)){2}",
+            # Sibling groups do not nest
+            "(a+)(b+)",
+        ],
+    )
+    def test_multi_level_neighbours_accepted(self, pattern: str) -> None:
+        """Escapes, classes, literals and non-repeated wrappers should pass."""
+        validate_pattern(pattern)
 
 
 class TestCustomSpanCategorizer:
@@ -652,3 +717,101 @@ class TestEdgeCases:
         text = "skill: 5 years"
         spans = cat.categorize(text)
         assert len(spans) == 1
+
+
+def _write_patterns(path: Path, entries: list[dict[str, object]]) -> Path:
+    """Write synthetic patterns JSON to path and return it."""
+    path.write_text(json.dumps(entries), encoding="utf-8")
+    return path
+
+
+class TestCustomSpanCategorizerFactory:
+    """Tests for the custom_span_categorizer spaCy factory registration."""
+
+    @pytest.fixture
+    def patterns_file(self, tmp_path: Path) -> Path:
+        """Synthetic patterns file matching a single lowercase token."""
+        return _write_patterns(
+            tmp_path / "patterns.json",
+            [{"category": "skill", "pattern": r"\bpython\b"}],
+        )
+
+    def test_add_pipe_sets_custom_spans_as_list_of_dicts(self, patterns_file: Path) -> None:
+        """Factory-built pipe populates doc._.custom_spans with dict entries."""
+        nlp: Language = spacy.blank("en")
+        nlp.add_pipe(
+            "custom_span_categorizer",
+            config={"patterns_path": str(patterns_file)},
+        )
+
+        doc = nlp("we use python daily")
+
+        assert isinstance(doc._.custom_spans, list)
+        assert len(doc._.custom_spans) >= 1
+        first = doc._.custom_spans[0]
+        assert isinstance(first, dict)
+        assert first["category"] == "skill"
+        assert first["text"] == "python"
+        assert first["start_char"] == 7
+        assert first["end_char"] == 13
+
+    def test_factory_does_not_register_or_set_requirement_spans(self, patterns_file: Path) -> None:
+        """Factory leaves requirement_spans extension registration and value alone."""
+        had_extension = Doc.has_extension("requirement_spans")
+        nlp: Language = spacy.blank("en")
+        nlp.add_pipe(
+            "custom_span_categorizer",
+            config={"patterns_path": str(patterns_file)},
+        )
+
+        doc = nlp("we use python daily")
+
+        assert Doc.has_extension("requirement_spans") == had_extension
+        assert getattr(doc._, "requirement_spans", None) is None
+
+    def test_missing_patterns_path_raises_value_error(self) -> None:
+        """Config with patterns_path=None fails with factory's ValueError."""
+        nlp: Language = spacy.blank("en")
+        with pytest.raises(ValueError, match="requires 'patterns_path'"):
+            nlp.add_pipe(
+                "custom_span_categorizer",
+                config={"patterns_path": None},
+            )
+
+    def test_empty_patterns_path_raises_value_error(self) -> None:
+        """Empty-string patterns_path is treated as missing."""
+        nlp: Language = spacy.blank("en")
+        with pytest.raises(ValueError, match="requires 'patterns_path'"):
+            nlp.add_pipe(
+                "custom_span_categorizer",
+                config={"patterns_path": ""},
+            )
+
+    def test_nonexistent_patterns_file_raises_file_not_found(self) -> None:
+        """Missing patterns file surfaces load_patterns' FileNotFoundError."""
+        nlp: Language = spacy.blank("en")
+        with pytest.raises(FileNotFoundError):
+            nlp.add_pipe(
+                "custom_span_categorizer",
+                config={"patterns_path": "/nonexistent/path/patterns.json"},
+            )
+
+    def test_factory_survives_module_reimport(self, patterns_file: Path) -> None:
+        """Re-importing the module re-registers the factory without error.
+
+        Runs the factory again after reload so later tests still see a
+        working registration.
+        """
+        importlib.reload(custom_module)
+        try:
+            nlp: Language = spacy.blank("en")
+            nlp.add_pipe(
+                "custom_span_categorizer",
+                config={"patterns_path": str(patterns_file)},
+            )
+            doc = nlp("we use python daily")
+            assert len(doc._.custom_spans) >= 1
+        finally:
+            # Restore names bound at import time so other tests keep
+            # referring to the same classes they were written against.
+            importlib.reload(custom_module)
