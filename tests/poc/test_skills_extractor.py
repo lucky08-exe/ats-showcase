@@ -971,6 +971,20 @@ class TestSkillExtractorAdjectiveListComma:
         """A noun before the comma keeps the #509 cut when a glued compound follows (#585 guard)."""
         assert extractor.extract("You will design systems, low-latency platforms.") == ["design systems"]
 
+    def test_glued_facing_compound_before_comma(self, extractor):
+        """A VBG glued compound ('user-facing,') opens the list; not cut to 'design user' (#587)."""
+        text = "You will design user-facing, real-time dashboards."
+        skills = extractor.extract(text)
+        assert skills != ["design user"]
+        assert skills == ["design user-facing, real-time dashboards"]
+
+    def test_noun_led_segment_after_bare_comma_pinned(self, extractor):
+        """'agile, platform teams': a noun-led segment after a bare comma does not extend the list.
+
+        Maintainer decision for #586: the span stays at the adjective head. Do not change.
+        """
+        assert extractor.extract("You will lead agile, platform teams.") == ["lead agile"]
+
 
 class TestSkillExtractorParticipialWith:
     """Past-tense/participle "built with <tech>" names a stack, not a skill (#551).
