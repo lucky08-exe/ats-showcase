@@ -201,7 +201,8 @@ def load_all_company_configs(config_dir: str = "config_test") -> Dict[str, Any]:
 
     for json_file in json_files:
         try:
-            with open(json_file, "r", encoding="utf-8") as f:
+            # utf-8-sig tolerates a leading BOM (common from Windows editors)
+            with open(json_file, "r", encoding="utf-8-sig") as f:
                 config = json.load(f)
                 companies = config.get("companies", {})
                 merged_companies.update(companies)
@@ -236,7 +237,7 @@ def resolve_company_selectors(job_company_name: str, merged_config: Dict[str, An
     Returns:
         Dict of selectors for the company (defaults to GENERIC_FALLBACK_SELECTORS if not found)
     """
-    job_name_lower = job_company_name.lower()
+    job_name_lower = job_company_name.strip().lower()
 
     # Try matching against keys
     for key, config in merged_config.items():
@@ -247,7 +248,12 @@ def resolve_company_selectors(job_company_name: str, merged_config: Dict[str, An
 
     # Try matching against "name" field
     for _key, config in merged_config.items():
-        config_name = config.get("name", "").lower()
+        if not isinstance(config, dict):
+            continue
+        name = config.get("name")
+        if not isinstance(name, str):
+            continue
+        config_name = name.lower()
         if config_name == job_name_lower:
             selectors = config.get("selectors")
             if selectors and isinstance(selectors, dict):
