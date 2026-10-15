@@ -1348,7 +1348,7 @@ def _preprocess_single_job(
         # Process text with spaCy to extract requirement spans (Phase 8b)
         # This sets doc._.requirements and doc._.requirement_spans for chunking
         doc = preprocessor.nlp(clean_text)
-        if getattr(preprocessor, "categorizer_strategy", "nlp") == "custom":
+        if preprocessor.categorizer_strategy == "custom":
             doc = preprocessor.apply_custom_spans(doc)
 
         # Process text with span preservation (Bug #1 fix: pass doc to chunker)

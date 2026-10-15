@@ -117,7 +117,6 @@ class Preprocessor:
         self.preserve_requirement_spans = preserve_requirement_spans
         self.section_engine = section_engine
         self.categorizer_strategy = categorizer_strategy
-        self.span_patterns_path = span_patterns_path
         self.nlp: Optional[Language] = None
         self._custom_span_component: Any = None
         if categorizer_strategy == "custom":
