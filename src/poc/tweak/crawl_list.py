@@ -568,9 +568,9 @@ async def crawl_company_jobs(
         timeout_ms: Page navigation timeout in milliseconds
 
     Returns:
-        List of extracted job dicts with 12 fields:
+        List of extracted job dicts with 13 fields:
         id, title, company, location, url, description, requirements,
-        salary_min, salary_max, posted_date, crawled_at, status.
+        salary_min, salary_max, posted_date, crawled_at, status, source_config.
     """
     if not company_config.get("enabled", True):
         logger.info(f"Skipping disabled company: {company_key}")

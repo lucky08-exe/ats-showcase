@@ -1100,7 +1100,7 @@ class TestExtractJobFromContainer:
             page=page,
             container=container,
             company_name="Carbon Robotics",
-            selectors={"title": "title", "company": ".company", "location": None, "link": None},
+            selectors=cast(dict[str, str], {"title": "title", "company": ".company", "location": None, "link": None}),
             base_url="",
             company_key="CarbonRobotics",
         )
@@ -1130,7 +1130,7 @@ class TestExtractJobFromContainer:
             page=page,
             container=container,
             company_name="Carbon Robotics",
-            selectors={"title": "title", "location": None, "link": None},
+            selectors=cast(dict[str, str], {"title": "title", "location": None, "link": None}),
             base_url="",
         )
 
@@ -1306,7 +1306,7 @@ class TestCrawlCompanyJobs:
 
         Validates that crawl_company_jobs:
         - Extracts 3 job containers with distinct titles and locations
-        - Returns full 12-field schema per job
+        - Returns full 13-field schema per job
         - Preserves company name from config
         - Properly parses selector-based field extraction
         """
