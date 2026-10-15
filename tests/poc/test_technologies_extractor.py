@@ -6,7 +6,7 @@ import pytest
 import spacy
 
 from src.poc.technologies.extract_technologies_a import TechExtractor
-from src.poc.technologies.patterns import TECH_TERMS
+from src.poc.technologies.patterns import HYPHEN_TECH_SUFFIXES, TECH_TERMS
 
 
 @pytest.fixture(scope="session")
@@ -720,3 +720,21 @@ class TestTechExtractorHyphenSuffix553:
         """'Spring-based' passes via the suffix rule; 'Go' via the 'with' cue. Not an adjacency fix."""
         techs = extractor.extract(nlp("Experience with Go and Spring-based services."))
         assert {"go", "spring"} <= set(techs)
+
+    # Parametrized over the set so any suffix added later is covered automatically.
+    @pytest.mark.parametrize("suffix", sorted(HYPHEN_TECH_SUFFIXES))
+    def test_each_hyphen_tech_suffix_extracted(self, extractor, nlp, suffix):
+        """Per-entry guard: every HYPHEN_TECH_SUFFIXES member keeps 'Go' via the suffix rule."""
+        text = f"We build Go-{suffix} services."  # SYNTHETIC: mechanics test, not real JD text
+        assert "go" in extractor.extract(nlp(text))
+
+    # The check compares after.lower_, so an uppercase entry would silently never match.
+    def test_hyphen_tech_suffixes_is_lowercase_frozenset(self):
+        """Table shape guard: a frozenset of non-empty lowercase strings (rule compares lower_)."""
+        assert isinstance(HYPHEN_TECH_SUFFIXES, frozenset)
+        assert all(isinstance(s, str) and s and s == s.lower() for s in HYPHEN_TECH_SUFFIXES)
+
+    # Hardcoded on purpose: removing an entry fails this test (the parametrized test only covers entries that exist).
+    def test_hyphen_tech_suffixes_exact_set(self):
+        """Pin the exact suffix set so deleting an entry cannot pass silently."""
+        assert HYPHEN_TECH_SUFFIXES == frozenset({"based", "native", "lang", "like"})

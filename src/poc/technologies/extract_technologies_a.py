@@ -4,7 +4,7 @@ import re
 
 import spacy
 
-from .patterns import TECH_TERMS
+from .patterns import HYPHEN_TECH_SUFFIXES, TECH_TERMS
 
 logger = logging.getLogger(__name__)
 
@@ -43,9 +43,6 @@ _PREV_CUE_INSUFFICIENT = frozenset({"lightning"})
 # collide with the common English phrase ("Lightning data storms").
 _LIGHTNING_NEXT_CUES = frozenset({"trainer", "module", "fabric", "datamodule", "callback", "callbacks"})
 _SENTENCE_END = frozenset({".", "!", "?"})
-# A hyphen after an ambiguous term joins an English compound ("Go-to-market", "Go-live")
-# unless the next word is a tech qualifier ("Go-based services").
-_HYPHEN_TECH_SUFFIXES = frozenset({"based", "native", "lang", "like"})
 # Negation (#497). spaCy splits "don't"/"doesn't" into "do" + "n't", so "n't" is
 # listed explicitly. "nice to have" is deliberately NOT a cue (optional, not absent).
 _NEGATION_CUES = frozenset({"no", "not", "without", "never", "lacking", "nor", "n't"})
@@ -78,7 +75,7 @@ def _is_tech_context(doc, ent, other_techs):
     prev = doc[ent.start - 1] if ent.start > 0 else None
     if nxt is not None and nxt.lower_ == "-":
         after = doc[ent.end + 1] if ent.end + 1 < len(doc) else None
-        if after is not None and after.lower_ in _HYPHEN_TECH_SUFFIXES:
+        if after is not None and after.lower_ in HYPHEN_TECH_SUFFIXES:
             return True
         return False
     next_cues = _LIGHTNING_NEXT_CUES if word in _PREV_CUE_INSUFFICIENT else _NEXT_CUES
