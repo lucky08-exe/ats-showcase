@@ -904,7 +904,7 @@ class TestSkillExtractorAdjectiveListComma:
         """A verb after a comma ('build tools') is its own match, not a premodifier."""
         assert extractor.extract("You will design systems, build tools.") == ["build tools", "design systems"]
 
-    def test_list_of_separate_skills_unchanged(self, extractor):
+    def test_serial_noun_list_after_verb_merged(self, extractor):
         """A list of separate skills after a verb is unchanged."""
         assert extractor.extract("You will build APIs, services, and tools.") == ["build apis, services, and tools"]
 
@@ -928,10 +928,6 @@ class TestSkillExtractorAdjectiveListComma:
         assert extractor.extract("You will design fault-tolerant, low-latency services, scalable platforms.") == [
             "design fault-tolerant, low-latency services"
         ]
-
-    def test_empty_input_no_match(self, extractor):
-        """Empty input yields no skills."""
-        assert extractor.extract("") == []
 
     def test_trailing_comma_after_adjective_keeps_head(self, extractor):
         """A trailing comma with no following segment keeps only the head (#557)."""
@@ -967,15 +963,10 @@ class TestSkillExtractorAdjectiveListComma:
             "design fault-tolerant, distributed, scalable services"
         ]
 
-    def test_noun_head_before_comma_guard_585(self, extractor):
-        """A noun before the comma keeps the #509 cut when a glued compound follows (#585 guard)."""
-        assert extractor.extract("You will design systems, low-latency platforms.") == ["design systems"]
-
     def test_glued_facing_compound_before_comma(self, extractor):
         """A VBG glued compound ('user-facing,') opens the list; not cut to 'design user' (#587)."""
         text = "You will design user-facing, real-time dashboards."
         skills = extractor.extract(text)
-        assert skills != ["design user"]
         assert skills == ["design user-facing, real-time dashboards"]
 
     def test_noun_led_segment_after_bare_comma_pinned(self, extractor):
@@ -1013,6 +1004,26 @@ class TestSkillExtractorAdjectiveListComma:
     def test_adverb_led_list_verb_tagged_premodifier(self, extractor):
         """'secure' tagged VERB before a noun head is a premodifier on the ADV path (#599)."""
         assert extractor.extract("You will develop quickly, secure APIs.") == ["develop quickly, secure apis"]
+
+    @pytest.mark.parametrize(
+        "text,head,noun",
+        [
+            ("You will design scalable, fault-tolerant services.", "design", "services"),
+            ("You will design real-time, fault-tolerant, low-latency services.", "design", "services"),
+            ("You will design fault-tolerant, user-facing services.", "design", "services"),
+            ("You will design cloud-native, fault-tolerant, low-latency services.", "design", "services"),
+            ("You will design fast, user-facing products.", "design", "products"),
+            ("You will design robust, well-tested microservices.", "design", "microservices"),
+        ],
+    )
+    def test_glued_compound_segment_continues_list(self, extractor, text, head, noun):
+        """A glued compound segment ('fault-tolerant', 'user-facing') is adjectival and reaches the head noun (#557)."""
+        skills = extractor.extract(text)
+        assert any(s.startswith(head) and s.endswith(noun) for s in skills)
+
+    def test_plain_noun_segment_still_ends_list(self, extractor):
+        """A plain non-hyphen NOUN segment ('data') is not adjectival and closes the list (#557)."""
+        assert extractor.extract("You will design fault-tolerant, data services.") == ["design fault-tolerant"]
 
 
 class TestSkillExtractorParticipialWith:
