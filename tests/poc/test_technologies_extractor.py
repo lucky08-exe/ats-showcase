@@ -733,3 +733,8 @@ class TestTechExtractorHyphenSuffix553:
         """Table shape guard: a frozenset of non-empty lowercase strings (rule compares lower_)."""
         assert isinstance(HYPHEN_TECH_SUFFIXES, frozenset)
         assert all(isinstance(s, str) and s and s == s.lower() for s in HYPHEN_TECH_SUFFIXES)
+
+    # Hardcoded on purpose: removing an entry fails this test (the parametrized test only covers entries that exist).
+    def test_hyphen_tech_suffixes_exact_set(self):
+        """Pin the exact suffix set so deleting an entry cannot pass silently."""
+        assert HYPHEN_TECH_SUFFIXES == frozenset({"based", "native", "lang", "like"})

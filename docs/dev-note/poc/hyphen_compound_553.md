@@ -31,7 +31,7 @@
 ## Test coverage status
 
 - `TestTechExtractorHyphenSuffix553` in `tests/poc/test_technologies_extractor.py` covers the mechanism.
-- All sentences in that class are **synthetic mechanics tests**; the cases added with the #553 data-driven refactor carry an inline `# SYNTHETIC:` comment. They prove the code follows the rule. They are not real-world coverage and say nothing about precision or recall on real postings.
+- All sentences in that class are **synthetic mechanics tests**; the parametrized per-suffix test carries an inline `# SYNTHETIC:` comment; the older cases are unmarked. They prove the code follows the rule. They are not real-world coverage and say nothing about precision or recall on real postings.
 
 ## Extension point (when real examples exist)
 
