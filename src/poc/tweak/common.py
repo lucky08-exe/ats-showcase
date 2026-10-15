@@ -241,6 +241,8 @@ def resolve_company_selectors(job_company_name: str, merged_config: Dict[str, An
 
     # Try matching against keys
     for key, config in merged_config.items():
+        if not isinstance(config, dict):
+            continue
         if key.lower() == job_name_lower:
             selectors = config.get("selectors")
             if selectors and isinstance(selectors, dict):

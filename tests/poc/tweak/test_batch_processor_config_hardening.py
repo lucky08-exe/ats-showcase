@@ -11,7 +11,6 @@ Tests validate:
 """
 
 import json
-from pathlib import Path
 
 import pytest
 
@@ -200,7 +199,7 @@ class TestLoadAllCompanyConfigsBOM:
 class TestResolveCompanySelectorsSafety:
     """Tests for resolve_company_selectors robustness (Issue #624 Item 5, 7)."""
 
-    def test_resolve_company_selectors_skips_non_string_name(self, tmp_path):
+    def test_resolve_company_selectors_skips_non_string_name(self):
         """Test resolve_company_selectors skips non-string name and succeeds on valid lookup.
 
         Config has a company with "name": 5 (non-string), plus valid "AlphaCo".
@@ -224,7 +223,7 @@ class TestResolveCompanySelectorsSafety:
         # Assert
         assert selectors["description_selector"] == ".alpha"
 
-    def test_resolve_company_selectors_strips_whitespace_from_input(self, tmp_path):
+    def test_resolve_company_selectors_strips_whitespace_from_input(self):
         """Test resolve_company_selectors strips whitespace from job_company_name.
 
         Input: job_company_name=" AlphaCo " (surrounding whitespace).
@@ -243,6 +242,21 @@ class TestResolveCompanySelectorsSafety:
 
         # Assert
         assert selectors["description_selector"] == ".alpha"
+
+    def test_resolve_company_selectors_with_non_dict_company_value_returns_empty(self):
+        """Test resolve_company_selectors with non-dict company value returns empty dict.
+
+        Config: {"AlphaCo": "x"} (string value, not dict).
+        Expected: resolve_company_selectors("AlphaCo", config) returns {} without raise.
+        """
+        # SYNTHETIC: config with non-dict company value (string instead of selector dict)
+        merged_config = {"AlphaCo": "x"}
+
+        # Act
+        selectors = resolve_company_selectors("AlphaCo", merged_config)
+
+        # Assert - should safely return empty dict, no AttributeError
+        assert selectors == {}
 
 
 class TestSourceConfigWhitespaceScoping:
