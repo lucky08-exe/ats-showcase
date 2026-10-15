@@ -245,12 +245,17 @@ def _is_adjectival(tok: Token) -> bool:
     return tok.pos_ == "ADJ" or _is_amod_participle(tok)
 
 
+def _is_verb_led_adverb(doc: Doc, idx: int) -> bool:
+    """True for an ADV tagged token directly after a skill verb ("design fast, ...") (#588)."""
+    return doc[idx].pos_ == "ADV" and idx > 0 and doc[idx - 1].pos_ == "VERB" and doc[idx - 1].lemma_ in _SKILL_VERB_SET
+
+
 def _ends_adjectival_modifier(doc: Doc, comma: int) -> bool:
     """True if the token before the comma at ``comma`` is an adjectival modifier (#557)."""
     before = comma - 1
     if before < 0:
         return False
-    if _is_adjectival(doc[before]):
+    if _is_adjectival(doc[before]) or _is_verb_led_adverb(doc, before):
         return True
     # Glued compound before the comma: "high-performance" (NOUN after ADJ), "data-driven".
     return _is_glued_hyphen(doc, before - 1) and before >= 2 and _is_adjectival(doc[before - 2])
@@ -295,6 +300,15 @@ def _adjective_list_end(doc: Doc, comma: int) -> int | None:
             break
         cursor = run_end
     return best
+
+
+def _adverb_led_list_end(doc: Doc, start: int) -> int | None:
+    """End (exclusive) of a skill-verb head whose ADV first segment opens an adjective list (#588)."""
+    if start + 2 >= len(doc) or doc[start].pos_ != "VERB" or doc[start].lemma_ not in _SKILL_VERB_SET:
+        return None
+    if doc[start + 1].pos_ != "ADV" or doc[start + 2].text != ",":
+        return None
+    return _adjective_list_end(doc, start + 2)
 
 
 def _coordinated_end(doc: Doc, head_end: int) -> int:
@@ -444,6 +458,9 @@ class SkillExtractor:
                 obj_end = _verb_start_end(doc, i)
                 if obj_end is not None:
                     matches.append(doc[i:obj_end])
+                list_end = _adverb_led_list_end(doc, i)
+                if list_end is not None:
+                    matches.append(doc[i:list_end])
             # Drop hyphen-variant matches whose "-" is spaced punctuation; the plain
             # pattern still yields the non-hyphenated prefix for those sentences.
             matches = [

@@ -985,6 +985,16 @@ class TestSkillExtractorAdjectiveListComma:
         """
         assert extractor.extract("You will lead agile, platform teams.") == ["lead agile"]
 
+    def test_adverb_first_segment_opens_list(self, extractor):
+        """An ADV-tagged first segment ('fast,') opens the list like an adjective (#588)."""
+        assert extractor.extract("You will design fast, reliable, and secure services.") == [
+            "design fast, reliable, and secure services"
+        ]
+
+    def test_plain_adverb_after_verb_not_a_skill(self, extractor):
+        """A plain adverb after a skill verb with no adjective list is not a skill (#588)."""
+        assert extractor.extract("You will design quickly.") == []
+
 
 class TestSkillExtractorParticipialWith:
     """Past-tense/participle "built with <tech>" names a stack, not a skill (#551).
