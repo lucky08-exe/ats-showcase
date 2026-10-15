@@ -17,6 +17,14 @@ logger = logging.getLogger(__name__)
 _NOUN_RUN_POS = ("ADJ", "NOUN", "PROPN")
 # Conjunctions that can join conjuncts ("data and ML", "data or ML").
 _JOIN_CONJUNCTIONS = ("and", "or")
+# Tech terms spaCy tags VERB because they share a spelling with a verb (#604). "Go" in a
+# language list ("Python, Java, and Go services") is the language, so it is a noun-run token.
+_TECH_TERMS_TAGGED_VERB = frozenset({"Go"})
+
+
+def _is_noun_run_token(tok: Token) -> bool:
+    """True for a token that can sit in a noun run: a noun-run POS, or a tech term tagged VERB (#604)."""
+    return tok.pos_ in _NOUN_RUN_POS or (tok.pos_ == "VERB" and tok.text in _TECH_TERMS_TAGGED_VERB)
 
 
 def _is_spaced_dash(tok: Token) -> bool:
@@ -65,7 +73,7 @@ def _has_spaced_dash(span: Span) -> bool:
 #   "manage Kafka clusters on GCP and ship Terraform modules"
 # The Matcher needs VERB, so such a token never starts a match. The guard below
 # lets it start its own match when ALL of these hold:
-#   - tag NOUN and dep conj, and the lemma is in SKILL_VERBS;
+#   - tag NOUN and dep conj (or dep compound directly after and/or, #604), and the lemma is in SKILL_VERBS;
 #   - an object noun group follows (optionally after one connector).
 # "the ship and crew" fails the dep test (ship is not conj) and "and crew" has no
 # verb lemma, so noun coordination is not matched. A skill verb must also govern the
@@ -84,7 +92,11 @@ def _is_verb_tagged_noun(tok: Token) -> bool:
     coordinations under another verb ("Our team includes the design and build
     managers") have the same tags but no skill verb above them, so they do not match.
     """
-    if tok.pos_ != "NOUN" or tok.dep_ != "conj" or tok.lemma_ not in _SKILL_VERB_SET:
+    if tok.pos_ != "NOUN" or tok.lemma_ not in _SKILL_VERB_SET:
+        return False
+    # spaCy tags "mentor" in "and mentor engineers" as compound, not conj (#604).
+    after_conjunction = tok.i > 0 and _is_join_conjunction(tok.doc[tok.i - 1])
+    if tok.dep_ != "conj" and not (tok.dep_ == "compound" and after_conjunction):
         return False
     return any(anc.pos_ == "VERB" and anc.lemma_ in _SKILL_VERB_SET for anc in tok.ancestors)
 
@@ -135,22 +147,56 @@ def _noun_run_end(doc: Doc, start: int) -> int | None:
     return end
 
 
+# --- Skill verb tagged ADJ after a comma or conjunction (#604) ------------------
+#
+# spaCy tags "lead" as ADJ in "design systems and lead teams" and "design fast, lead
+# teams". The Matcher needs VERB, so such a token never starts a match. It starts its own
+# span when a comma or conjunction precedes it and a noun run follows. _conjunct_end()
+# refuses it, so the earlier span does not absorb it. "lead agile, platform teams" is
+# unaffected: its "lead" is sentence-led, not preceded by a comma or conjunction.
+
+
+def _is_skill_verb_adjective(tok: Token) -> bool:
+    return tok.pos_ == "ADJ" and tok.lemma_ in _SKILL_VERB_SET
+
+
+def _skill_verb_adjective_end(doc: Doc, start: int) -> int | None:
+    """End (exclusive) of a span headed by a skill verb tagged ADJ at ``start``, or None (#604)."""
+    if start < 1 or start >= len(doc) or not _is_skill_verb_adjective(doc[start]):
+        return None
+    if doc[start - 1].text != "," and not _is_join_conjunction(doc[start - 1]):
+        return None
+    return _noun_run_end(doc, start + 1)
+
+
 def _conjunct_end(doc: Doc, start: int) -> int | None:
     """End (exclusive) of a conjunct noun run starting at ``start``, or None.
 
-    None also when ``start`` is a verb-tagged-NOUN that passes the #511 guard: it
-    starts its own match and must not be merged into the preceding span.
+    None also when ``start`` is a verb-tagged-NOUN that passes the #511 guard, or a
+    skill verb tagged ADJ (#604): each starts its own match and must not be merged
+    into the preceding span.
     """
-    if _verb_start_end(doc, start) is not None:
+    if _verb_start_end(doc, start) is not None or _skill_verb_adjective_end(doc, start) is not None:
         return None
     return _noun_run_end(doc, start)
 
 
+def _is_committable_conjunct(doc: Doc, run_start: int, run_end: int) -> bool:
+    """True if a conjunct run may extend the span: a plain noun head or a tech term tagged VERB (#604).
+
+    An adjective-only run ("and secure.") is not a noun head and must not end the span.
+    """
+    last = doc[run_end - 1]
+    if last.pos_ == "VERB" and last.text in _TECH_TERMS_TAGGED_VERB:
+        return True
+    return _is_plain_noun_head(doc, run_start, run_end)
+
+
 def _starts_noun_run(doc: Doc, start: int) -> bool:
     """True if a noun run can begin at ``start``: a noun-run token, or an amod participle before a noun."""
-    if doc[start].pos_ in _NOUN_RUN_POS:
+    if _is_noun_run_token(doc[start]):
         return True
-    return _is_amod_participle(doc[start]) and start + 1 < len(doc) and doc[start + 1].pos_ in _NOUN_RUN_POS
+    return _is_amod_participle(doc[start]) and start + 1 < len(doc) and _is_noun_run_token(doc[start + 1])
 
 
 def _run_end(doc: Doc, start: int) -> int:
@@ -161,9 +207,9 @@ def _run_end(doc: Doc, start: int) -> int:
     """
     end = start
     while end < len(doc):
-        if doc[end].pos_ in _NOUN_RUN_POS:
+        if _is_noun_run_token(doc[end]):
             end += 1
-        elif _is_amod_participle(doc[end]) and end + 1 < len(doc) and doc[end + 1].pos_ in _NOUN_RUN_POS:
+        elif _is_amod_participle(doc[end]) and end + 1 < len(doc) and _is_noun_run_token(doc[end + 1]):
             end += 1
         else:
             break
@@ -250,6 +296,9 @@ def _is_adjectival_segment(doc: Doc, seg: int) -> bool:
         return True
     if not _is_glued_hyphen(doc, seg + 1) or seg + 2 >= len(doc):
         return False
+    # "self-healing", "self-service": spaCy tags "self" NOUN and the second half NOUN too (#604).
+    if doc[seg].lower_ == "self":
+        return True
     last = doc[seg + 2]
     return last.pos_ == "ADJ" or last.tag_ in ("VBN", "VBG")
 
@@ -284,6 +333,23 @@ def _is_plain_noun_head(doc: Doc, run_start: int, run_end: int) -> bool:
     return not (last - 1 >= run_start and _is_glued_hyphen(doc, last - 1))
 
 
+def _adjective_pair_end(doc: Doc, conj: int) -> int | None:
+    """End of a "<conj> ADJ NOUN" pair closing an adjective list at ``conj`` (#604), or None.
+
+    "secure and reliable APIs": ``conj`` is the "and" after "secure", and the pair ends
+    at a plain noun head.
+    """
+    if conj >= len(doc) or not _is_join_conjunction(doc[conj]):
+        return None
+    pair = conj + 1
+    if pair >= len(doc) or not _is_adjectival_segment(doc, pair):
+        return None
+    pair_end = _segment_run_end(doc, pair)
+    if pair_end is None or not _is_plain_noun_head(doc, pair, pair_end):
+        return None
+    return pair_end
+
+
 def _adjective_list_end(doc: Doc, comma: int, *, adverb_led: bool = False) -> int | None:
     """End (exclusive) of an adjective list after the bare comma at ``comma``, or None (#557).
 
@@ -315,6 +381,11 @@ def _adjective_list_end(doc: Doc, comma: int, *, adverb_led: bool = False) -> in
         if _is_plain_noun_head(doc, seg, run_end):
             best = run_end
             break
+        # An adjective pair closes the list: "secure and reliable APIs" (#604).
+        pair_end = _adjective_pair_end(doc, run_end) if not closes else None
+        if pair_end is not None:
+            best = pair_end
+            break
         if closes:
             break
         cursor = run_end
@@ -340,6 +411,35 @@ def _adverb_led_list_end(doc: Doc, start: int) -> int | None:
             return None
         return run_end
     return _adjective_list_end(doc, start + 2, adverb_led=True)
+
+
+# --- Verb list before an object (#604) --------------------------------------------
+#
+# "design, build, and maintain fault-tolerant, low-latency services": the skill verb is
+# followed by a comma list of verbs, not an object. The Matcher needs a noun run right
+# after the verb, so it finds nothing. _verb_list_end() walks the verb list and returns
+# the end of the object noun run. Later verbs need only be VERB-tagged ("maintain" is not
+# in SKILL_VERBS); the head verb must be a skill verb. The span end is then extended by
+# _coordinated_end() as for any head.
+
+
+def _verb_list_end(doc: Doc, start: int) -> int | None:
+    """End (exclusive) of a comma-separated verb list under a skill verb plus its object, or None."""
+    if start >= len(doc) or doc[start].pos_ != "VERB" or doc[start].lemma_ not in _SKILL_VERB_SET:
+        return None
+    last = start
+    cursor = start + 1
+    while cursor < len(doc) and doc[cursor].text == ",":
+        seg = cursor + 1
+        if seg < len(doc) and _is_join_conjunction(doc[seg]):
+            seg += 1
+        if seg >= len(doc) or doc[seg].pos_ != "VERB":
+            break
+        last = seg
+        cursor = seg + 1
+    if last == start:
+        return None
+    return _noun_run_end(doc, last + 1)
 
 
 def _coordinated_end(doc: Doc, head_end: int) -> int:
@@ -383,9 +483,11 @@ def _coordinated_end(doc: Doc, head_end: int) -> int:
         if run_end is None:
             break
         if commits:
-            committed = run_end
             # A committed conjunct ends the bare-noun run, so a later adjective list may open (#557).
             bare_comma_conjunct = False
+            # An adjective-only conjunct ("and secure.") is not a noun head: it does not extend the span (#604).
+            if _is_committable_conjunct(doc, run_start, run_end):
+                committed = run_end
         cursor = run_end
     return committed
 
@@ -492,6 +594,12 @@ class SkillExtractor:
                 list_end = _adverb_led_list_end(doc, i)
                 if list_end is not None:
                     matches.append(doc[i:list_end])
+                verb_list_end = _verb_list_end(doc, i)
+                if verb_list_end is not None:
+                    matches.append(doc[i:verb_list_end])
+                adj_verb_end = _skill_verb_adjective_end(doc, i)
+                if adj_verb_end is not None:
+                    matches.append(doc[i:adj_verb_end])
             # Drop hyphen-variant matches whose "-" is spaced punctuation; the plain
             # pattern still yields the non-hyphenated prefix for those sentences.
             matches = [

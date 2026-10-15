@@ -887,11 +887,12 @@ class TestSkillExtractorAdjectiveListComma:
         """'design systems, scalable, reliable platforms' keeps only the head (#557)."""
         assert extractor.extract("You will design systems, scalable, reliable platforms.") == ["design systems"]
 
-    def test_noun_before_comma_with_adjective_pair_unchanged(self, extractor):
-        """'design systems, scalable and resilient' keeps the existing tentative-comma result."""
-        assert extractor.extract("You will design systems, scalable and resilient.") == [
-            "design systems, scalable and resilient"
-        ]
+    def test_noun_before_comma_with_adjective_pair_keeps_head(self, extractor):
+        """'design systems, scalable and resilient': the adjective-only tail is not a noun head (#604).
+
+        Was merged into the span before #604. Matches 'design systems, scalable, reliable platforms'.
+        """
+        assert extractor.extract("You will design systems, scalable and resilient.") == ["design systems"]
 
     def test_serial_noun_list_unchanged(self, extractor):
         """A serial list of separate nouns with a verb conjunct is unchanged (#509)."""
@@ -986,13 +987,23 @@ class TestSkillExtractorAdjectiveListComma:
         """A plain adverb after a skill verb with no adjective list is not a skill (#588)."""
         assert extractor.extract("You will design quickly.") == []
 
-    def test_adverb_led_list_rejects_skill_verb_segment(self, extractor):
-        """A skill-verb segment ('lead') after an ADV-led list is a verb, not a premodifier (#599)."""
-        assert extractor.extract("You will design fast, lead teams.") == []
+    def test_adverb_led_list_keeps_skill_verb_segment_own_span(self, extractor):
+        """A skill-verb segment ('lead') after an ADV-led list is a verb, not a premodifier (#599).
+
+        No merged 'design fast, lead teams' span. The verb heads its own span (#604).
+        """
+        assert extractor.extract("You will design fast, lead teams.") == ["lead teams"]
 
     def test_adverb_led_list_rejects_skill_verb_segment_in_serial_list(self, extractor):
-        """No merged span when a skill-verb segment closes an ADV-led serial list (#599)."""
-        assert extractor.extract("You will design quickly, lead teams, and mentor engineers.") == []
+        """No span starts at the ADV-led head when a skill-verb segment closes the list (#599).
+
+        'lead teams' stays its own span and 'and mentor engineers' is a separate verb-led
+        span: the skill verb after 'and' does not merge into 'lead teams' (#604).
+        """
+        assert extractor.extract("You will design quickly, lead teams, and mentor engineers.") == [
+            "lead teams",
+            "mentor engineers",
+        ]
 
     def test_adverb_led_list_coordinated_verb_pinned(self, extractor):
         """ADV-led list after a coordinated verb: current output pinned (#599)."""
@@ -1049,3 +1060,81 @@ class TestSkillExtractorParticipialWith:
     def test_participle_without_with_still_extracted(self, extractor):
         """A participle skill verb not followed by 'with' keeps its span."""
         assert extractor.extract("Built scalable APIs with Python.") == ["built scalable apis"]
+
+
+class TestSkillExtractorResidualsWave604:
+    """Residuals from #557 review (#604): skill verbs after 'and', verb lists, tech terms.
+
+    Each sentence pins one case from the issue. The guards pin behaviour that must not
+    change: a noun conjunct before a comma (#509), a skill-verb segment after a comma
+    (#599), and the adjective-list heads (#557, #585, #588).
+    """
+
+    @pytest.mark.parametrize(
+        "text,expected",
+        [
+            # 1. A skill verb after 'and' starts its own span; no merge across the conjunction.
+            ("You will design systems and lead teams.", ["design systems", "lead teams"]),
+            (
+                "You will design fast, reliable services and lead teams.",
+                ["design fast, reliable services", "lead teams"],
+            ),
+            # 2. 'Go' is a tech term tagged VERB; the language list stays one span.
+            ("You will design Python, Java, and Go services.", ["design python, java, and go services"]),
+            # 3. A comma list of verbs, then an adjective-list object: one span.
+            (
+                "You will design, build, and maintain fault-tolerant, low-latency services.",
+                ["design, build, and maintain fault-tolerant, low-latency services"],
+            ),
+            # 4. A skill verb after an ADV-led comma is its own span.
+            ("You will design fast, lead teams.", ["lead teams"]),
+            # 5. An adjective pair before a noun head closes an ADV-led list.
+            (
+                "You will develop quickly, secure and reliable APIs.",
+                ["develop quickly, secure and reliable apis"],
+            ),
+            # 1b. An adjective-only conjunct does not end the span; a noun-headed conjunct does.
+            ("You will design fast, reliable services and secure.", ["design fast, reliable services"]),
+            ("You will design systems and secure.", ["design systems"]),
+            ("You will design systems and secure platforms.", ["design systems and secure platforms"]),
+            (
+                "You will design fast, reliable services and secure platforms.",
+                ["design fast, reliable services and secure platforms"],
+            ),
+            # 1c. A skill verb after 'and' is its own span, whatever spaCy tags it (#604).
+            ("You will design systems and mentor engineers.", ["design systems", "mentor engineers"]),
+            ("You will design systems and build tools.", ["build tools", "design systems"]),
+            # 6. Hyphenated adjectives after an adverb continue the list.
+            (
+                "You will design fast, self-healing, data-driven platforms.",
+                ["design fast, self-healing, data-driven platforms"],
+            ),
+            (
+                "You will develop quickly, self-healing, data-driven APIs.",
+                ["develop quickly, self-healing, data-driven apis"],
+            ),
+        ],
+    )
+    def test_issue_604_case(self, extractor, text, expected):
+        """Each #604 residual produces the span the issue asks for."""
+        assert extractor.extract(text) == expected
+
+    @pytest.mark.parametrize(
+        "text,expected",
+        [
+            # #509: a noun before the comma keeps the span at the noun.
+            ("You will design systems, platforms, and develop tools.", ["design systems", "develop tools"]),
+            # #599: a skill-verb segment after a comma breaks the list; no merged span.
+            ("You will design systems, lead teams.", ["design systems", "lead teams"]),
+            # #599 guard: 'design fast, lead teams' never merges into one span.
+            ("You will design fast, lead teams.", ["lead teams"]),
+            # Adjective-list heads unchanged.
+            ("You will lead agile, platform teams.", ["lead agile"]),
+            # Neighbour shape: a noun list after a non-skill verb produces nothing (#604).
+            ("Experience with APIs, model training.", []),
+            ("You will design fault-tolerant, data services.", ["design fault-tolerant"]),
+        ],
+    )
+    def test_issue_604_guard(self, extractor, text, expected):
+        """Existing guards from #509, #557 and #599 stay green with the #604 changes."""
+        assert extractor.extract(text) == expected
