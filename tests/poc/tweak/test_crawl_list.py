@@ -397,7 +397,7 @@ class TestExtractJobFromContainer:
 
     @pytest.mark.asyncio
     async def test_extract_job_from_container_full_schema(self):
-        """Test that extract_job_from_container returns all 12 required fields."""
+        """Test that extract_job_from_container returns all 13 required fields."""
         # Mock page and container
         page = AsyncMock()
         container = AsyncMock()
@@ -434,7 +434,7 @@ class TestExtractJobFromContainer:
             base_url="https://example.com/",
         )
 
-        # Verify all 12 fields are present
+        # Verify all 13 fields are present
         assert result is not None
         expected_fields = {
             "id",
@@ -449,6 +449,7 @@ class TestExtractJobFromContainer:
             "posted_date",
             "crawled_at",
             "status",
+            "source_config",
         }
         assert set(result.keys()) == expected_fields
 
@@ -1073,6 +1074,127 @@ class TestExtractJobFromContainer:
         # page.wait_for_timeout should NOT have been called
         page.wait_for_timeout.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_extract_job_records_source_config_key_not_extracted_company(self):
+        """source_config is the config key even when the card's company differs from it."""
+        page = AsyncMock()
+        container = AsyncMock()
+
+        title_elem = AsyncMock()
+        title_elem.text_content = AsyncMock(return_value="Platform Engineer")
+
+        company_elem = AsyncMock()
+        company_elem.text_content = AsyncMock(return_value="Acme Robotics Ltd")
+
+        async def query_selector_side_effect(selector):
+            if selector == "title":
+                return title_elem
+            if selector == ".company":
+                return company_elem
+            return None
+
+        container.query_selector = AsyncMock(side_effect=query_selector_side_effect)
+        container.evaluate = AsyncMock(return_value=None)
+
+        result = await extract_job_from_container(
+            page=page,
+            container=container,
+            company_name="Carbon Robotics",
+            selectors={"title": "title", "company": ".company", "location": None, "link": None},
+            base_url="",
+            company_key="CarbonRobotics",
+        )
+
+        assert result is not None
+        assert result["company"] == "Acme Robotics Ltd"
+        assert result["source_config"] == "CarbonRobotics"
+
+    @pytest.mark.asyncio
+    async def test_extract_job_source_config_defaults_to_empty_key(self):
+        """Without company_key, source_config is the empty default, not the display name."""
+        page = AsyncMock()
+        container = AsyncMock()
+
+        title_elem = AsyncMock()
+        title_elem.text_content = AsyncMock(return_value="QA Analyst")
+
+        async def query_selector_side_effect(selector):
+            if selector == "title":
+                return title_elem
+            return None
+
+        container.query_selector = AsyncMock(side_effect=query_selector_side_effect)
+        container.evaluate = AsyncMock(return_value=None)
+
+        result = await extract_job_from_container(
+            page=page,
+            container=container,
+            company_name="Carbon Robotics",
+            selectors={"title": "title", "location": None, "link": None},
+            base_url="",
+        )
+
+        assert result is not None
+        assert result["company"] == "Carbon Robotics"
+        assert result["source_config"] == ""
+
+    @pytest.mark.asyncio
+    async def test_crawl_company_jobs_source_config_is_config_key(self):
+        """crawl output records carry the config key in source_config, independent of extracted company."""
+        browser = AsyncMock()
+        page = MagicMock()
+        browser.new_page = AsyncMock(return_value=page)
+
+        container = AsyncMock()
+        title_elem = AsyncMock()
+        title_elem.text_content = AsyncMock(return_value="Backend Developer")
+        company_elem = AsyncMock()
+        company_elem.text_content = AsyncMock(return_value="Acme Robotics Ltd")
+
+        async def query_selector_side_effect(selector):
+            if selector == ".job-title":
+                return title_elem
+            if selector == ".job-company":
+                return company_elem
+            return None
+
+        container.query_selector = AsyncMock(side_effect=query_selector_side_effect)
+        container.evaluate = AsyncMock(return_value=None)
+
+        page.query_selector_all = AsyncMock(return_value=[container])
+        page.wait_for_selector = AsyncMock()
+        page.wait_for_timeout = AsyncMock()
+        page.close = AsyncMock()
+        page.set_default_timeout = MagicMock()
+
+        company_config = {
+            "enabled": True,
+            "name": "Carbon Robotics",
+            "url": "https://example.com/careers",
+            "selectors": {
+                "job_container": ".job-card",
+                "job_card": ".job-card",
+                "title": ".job-title",
+                "company": ".job-company",
+                "location": None,
+                "link": None,
+            },
+            "crawler": {"delay_ms": 0, "max_jobs_debug": None},
+        }
+
+        with patch("src.poc.tweak.crawl_list.retry_goto", new_callable=AsyncMock) as mock_retry:
+            mock_retry.return_value = True
+            jobs = await crawl_company_jobs(
+                browser=browser,
+                company_key="CarbonRobotics",
+                company_config=company_config,
+                timeout_ms=30000,
+            )
+
+        assert len(jobs) == 1
+        assert jobs[0]["company"] == "Acme Robotics Ltd"
+        assert jobs[0]["source_config"] == "CarbonRobotics"
+
 
 class TestCrawlCompanyJobs:
     """Test suite for crawl_company_jobs function."""
@@ -1291,6 +1413,7 @@ class TestCrawlCompanyJobs:
                 "posted_date",
                 "crawled_at",
                 "status",
+                "source_config",
             }
             assert set(job.keys()) == expected_fields
 
