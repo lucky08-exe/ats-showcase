@@ -18,15 +18,17 @@ Run with:
 
 import json
 from pathlib import Path
-from typing import Any, List
+from typing import Any, List, Tuple
 
 import pytest
 
-from src.poc.tweak.markdown_section_classifier import SectionType
-from src.poc.tweak.multi_line_paragraph import MarkdownSection
+from src.parsers.html_to_markdown import html_to_markdown
+from src.poc.tweak.markdown_section_classifier import SectionClassifier, SectionType
+from src.poc.tweak.multi_line_paragraph import MarkdownSection, MarkdownSpanRuler
 
 # Import to trigger factory registration
 from src.poc.tweak.spacy_pipeline import SectionClassifierComponent, registry  # noqa: F401
+from src.poc.tweak.spacy_pipeline.heading_promoter import HeadingPromoter
 
 # ============================================================================
 # Fixtures
@@ -186,7 +188,6 @@ class TestSectionClassifierComponentProperties:
         """Verify component has internal SectionClassifier instance."""
         classifier = nlp.create_pipe("section_classifier")
         assert hasattr(classifier, "classifier")
-        from src.poc.tweak.markdown_section_classifier import SectionClassifier
 
         assert isinstance(classifier.classifier, SectionClassifier)
 
@@ -659,6 +660,157 @@ class TestSectionClassifierConsistency:
 
         # All results should be identical
         assert results[0] == results[1] == results[2]
+
+
+# ============================================================================
+# Phase 10: HeadingPromoter -> SectionClassifier EEO Integration (Issue #520)
+# ============================================================================
+
+
+class TestHeadingPromoterSectionClassifierEEOIntegration:
+    """EEO isolation (Issue #520) carried through MarkdownSpanRuler and SectionClassifier.
+
+    All text is synthetic and hand-written. Covers an end-to-end WorkSource-shaped document,
+    the #482 first-sentence window boundary (heading_promoter.py `first_sentence[:200]`; the
+    #482 outcome is not yet decided, so these cases pin current behaviour only), a heading
+    glued to its body, and a local-only structural check against gitignored data/work.
+    """
+
+    @pytest.fixture
+    def blank_nlp(self) -> Any:
+        """Blank English pipeline: MarkdownSpanRuler.parse needs a tokenizer, not en_core_web_md."""
+        spacy = pytest.importorskip("spacy")
+        return spacy.blank("en")
+
+    @staticmethod
+    def _classify_sections(text: str, nlp: Any) -> List[Tuple[MarkdownSection, Any]]:
+        """Run HeadingPromoter, split with MarkdownSpanRuler, classify each section."""
+        promoted = HeadingPromoter().process(text)
+        sections = MarkdownSpanRuler(nlp).parse(promoted)
+        classifier = SectionClassifier()
+        return [(section, classifier.classify(section)) for section in sections]
+
+    def test_end_to_end_trailing_eeo_isolated_from_preceding_section(self, blank_nlp: Any) -> None:
+        """Trailing EEO paragraph becomes its own SKIP section; preceding section is unchanged."""
+        text = (
+            "Job Description\n\n"
+            "Build and operate internal developer platforms for a regional logistics network.\n\n"
+            "Technical Skills\n\n"
+            "* Python\n"
+            "* Terraform\n\n"
+            "Northwind Logistics is an equal opportunity employer and welcomes applicants of all backgrounds.\n\n"
+            "Please contact HR with any questions."
+        )
+        pairs = self._classify_sections(text, blank_nlp)
+        assert [section.title for section, _ in pairs] == [
+            "Job Description",
+            "Technical Skills",
+            "Equal Opportunity Employer",
+        ]
+
+        skills_section, skills_clf = pairs[1]
+        assert skills_section.content.strip() == "## Technical Skills\n\n* Python\n* Terraform"
+        assert skills_clf.all_types[0].section_type is SectionType.SKILLS
+        assert skills_clf.is_skip is False
+
+        eeo_section, eeo_clf = pairs[2]
+        assert eeo_section.content.strip() == (
+            "## Equal Opportunity Employer\n\n"
+            "Northwind Logistics is an equal opportunity employer and welcomes applicants of all backgrounds.\n\n"
+            "Please contact HR with any questions."
+        )
+        assert eeo_clf.is_skip is True
+
+    @pytest.mark.parametrize(
+        ("offset", "expect_isolated"),
+        [
+            # Added control (not requested): trigger ends at index 199, the last index inside [:200].
+            (174, True),
+            # Trigger starts at 190: only "equal oppo" falls inside first_sentence[:200].
+            (190, False),
+            # Only "e" falls inside first_sentence[:200].
+            (199, False),
+            # Trigger starts beyond the 200-char window.
+            (210, False),
+        ],
+    )
+    def test_trigger_window_boundary_current_behaviour(self, offset: int, expect_isolated: bool) -> None:
+        """EEO trigger must end within the first 200 chars of the first sentence to isolate.
+
+        The #482 outcome (widen, keep or move the window) is not yet decided; this pins current
+        behaviour only and should be revisited when #482 is decided.
+        """
+        body = "x" * offset + "equal opportunity employer for all applicants."
+        text = f"{body}\n\nPlease contact HR."
+        result = HeadingPromoter().process(text)
+        if expect_isolated:
+            assert result == f"## Equal Opportunity Employer\n\n{text}"
+        else:
+            assert result == text
+
+    def test_heading_glued_to_eeo_body_isolated_current_behaviour(self, blank_nlp: Any) -> None:
+        """Heading glued to body: the EEO sentence isolates as a whole line, glued text kept verbatim.
+
+        Probe-by-reading: the trigger "equal employment opportunity" matches the casefolded
+        substring of "Equal Employment OpportunityBlue", so the paragraph is isolated. Not xfail.
+        """
+        glued = "Equal Employment OpportunityBlue Origin is proud to be an equal opportunity employer."
+        text = (
+            "Job Description\n\n"
+            "Maintain build tooling for the warehouse team.\n\n"
+            f"{glued}\n\n"
+            "Please contact HR with any questions."
+        )
+        pairs = self._classify_sections(text, blank_nlp)
+        assert HeadingPromoter().process(text) == (
+            "## Job Description\n\n"
+            "Maintain build tooling for the warehouse team.\n\n"
+            "## Equal Opportunity Employer\n\n"
+            f"{glued}\n\n"
+            "Please contact HR with any questions."
+        )
+        eeo_section, eeo_clf = pairs[-1]
+        assert eeo_section.title == "Equal Opportunity Employer"
+        assert glued in eeo_section.content
+        assert eeo_clf.is_skip is True
+
+    def test_local_my_details_eeo_section_structure(self, blank_nlp: Any) -> None:
+        """Local-only structural check against gitignored data/work/my_details.json.
+
+        Skipped when the file is absent or unreadable. Asserts structure only: some section is
+        SKIP and mentions equal opportunity/employment. No job text is asserted or printed.
+        """
+        repo_root = Path(__file__).resolve().parents[4]
+        details_path = repo_root / "data" / "work" / "my_details.json"
+        if not details_path.is_file():
+            pytest.skip("data/work/my_details.json not present (local-only, gitignored)")
+        try:
+            jobs = json.loads(details_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            pytest.skip("data/work/my_details.json unreadable or not valid JSON")
+        if not isinstance(jobs, list):
+            pytest.skip("data/work/my_details.json is not a JSON list")
+
+        eeo_markers = ("equal opportunity", "equal employment")
+        description = next(
+            (
+                job["description"]
+                for job in jobs
+                if isinstance(job, dict)
+                and isinstance(job.get("description"), str)
+                and any(marker in job["description"].casefold() for marker in eeo_markers)
+            ),
+            None,
+        )
+        if description is None:
+            pytest.skip("no local description contains an EEO marker")
+
+        # clean_html strips legal boilerplate (incl. EEO) before the promoter ever runs, so use the
+        # raw conversion to exercise promoter -> classifier on real EEO text.
+        text = html_to_markdown(description) or ""
+        pairs = self._classify_sections(text, blank_nlp)
+        skipped = [section for section, clf in pairs if clf.is_skip]
+        assert any(any(marker in section.content.casefold() for marker in eeo_markers) for section in skipped)
 
 
 # ============================================================================
