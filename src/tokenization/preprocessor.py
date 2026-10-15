@@ -7,6 +7,7 @@ from typing import Any, List, Optional, Set, Tuple, Union
 
 import spacy
 from spacy.language import Language
+from spacy.tokens import Doc
 
 from src.preprocessing.section_detector import SectionDetector
 from src.preprocessing.section_extractor import SectionedResult, extract_sectioned
@@ -87,6 +88,8 @@ class Preprocessor:
         extract_requirements: bool = True,
         preserve_requirement_spans: bool = True,
         section_engine: Optional[SectionDetector] = None,
+        categorizer_strategy: str = "nlp",
+        span_patterns_path: str | None = None,
     ):
         """Initialize preprocessor with spaCy model.
 
@@ -96,13 +99,64 @@ class Preprocessor:
             preserve_requirement_spans: Whether to respect requirement spans during chunking
             section_engine: Optional SectionDetector instance for opt-in section-aware requirement
                           extraction (default: None = legacy behavior unchanged)
+            categorizer_strategy: "nlp" (POS/DEP span categorizer, default) or "custom"
+                          (regex patterns from span_patterns_path, written to doc._.custom_spans)
+            span_patterns_path: Path to patterns JSON; required when categorizer_strategy is "custom"
+
+        Raises:
+            ValueError: Unknown strategy, "custom" without span_patterns_path, or invalid patterns.
+            OSError: If span_patterns_path cannot be read.
         """
+        if categorizer_strategy not in ("nlp", "custom"):
+            raise ValueError(f"Unknown categorizer strategy: {categorizer_strategy}")
+        if categorizer_strategy == "custom" and not span_patterns_path:
+            raise ValueError("categorizer strategy 'custom' requires span_patterns_path")
+
         self.model_name = model
         self.extract_requirements = extract_requirements
         self.preserve_requirement_spans = preserve_requirement_spans
         self.section_engine = section_engine
+        self.categorizer_strategy = categorizer_strategy
+        self.span_patterns_path = span_patterns_path
         self.nlp: Optional[Language] = None
+        self._custom_span_component: Any = None
+        if categorizer_strategy == "custom":
+            self._custom_span_component = self._build_custom_span_component(span_patterns_path or "")
         self._load_model()
+
+    @staticmethod
+    def _build_custom_span_component(span_patterns_path: str) -> Any:
+        """Build a regex SpanCategorizerComponent from a patterns JSON file.
+
+        Args:
+            span_patterns_path: Path to patterns JSON (see load_patterns)
+
+        Returns:
+            SpanCategorizerComponent that writes doc._.custom_spans when called directly
+        """
+        from src.preprocessing.custom_span_categorizer import (
+            CustomSpanCategorizer,
+            SpanCategorizerComponent,
+            load_patterns,
+        )
+
+        return SpanCategorizerComponent(CustomSpanCategorizer(load_patterns(span_patterns_path)))
+
+    def apply_custom_spans(self, doc: Doc) -> Doc:
+        """Run the custom span categorizer directly on a Doc (custom strategy only).
+
+        Not registered as a pipeline component. No-op for the "nlp" strategy.
+
+        Args:
+            doc: spaCy Doc produced by self.nlp
+
+        Returns:
+            Same Doc, with doc._.custom_spans set when strategy is "custom"
+        """
+        if self._custom_span_component is None:
+            return doc
+        result: Doc = self._custom_span_component(doc)
+        return result
 
     def _load_model(self) -> None:
         """Load spaCy model with error handling.

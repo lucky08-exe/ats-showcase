@@ -1348,6 +1348,8 @@ def _preprocess_single_job(
         # Process text with spaCy to extract requirement spans (Phase 8b)
         # This sets doc._.requirements and doc._.requirement_spans for chunking
         doc = preprocessor.nlp(clean_text)
+        if getattr(preprocessor, "categorizer_strategy", "nlp") == "custom":
+            doc = preprocessor.apply_custom_spans(doc)
 
         # Process text with span preservation (Bug #1 fix: pass doc to chunker)
         chunks = chunker.chunk(clean_text, doc=doc)
@@ -1526,6 +1528,42 @@ def _update_job_timelines(jobs: List[Any]) -> None:
         logger.warning(f"Could not update preprocessing timestamps: {e}")
 
 
+def _validate_categorizer_options(categorizer_strategy: str, span_patterns: Optional[str]) -> None:
+    """Validate span categorizer CLI options before any preprocessing work.
+
+    Args:
+        categorizer_strategy: "nlp" (default) or "custom"
+        span_patterns: Path to patterns JSON (required for "custom")
+
+    Raises:
+        typer.Exit: With code 1 on unknown strategy, missing/unreadable/invalid patterns file
+    """
+    if categorizer_strategy not in ("nlp", "custom"):
+        typer.echo(f"❌ Invalid categorizer strategy: {categorizer_strategy}", err=True)
+        typer.echo("   Valid strategies: nlp, custom", err=True)
+        raise typer.Exit(1)
+
+    if categorizer_strategy == "custom" and not span_patterns:
+        typer.echo("❌ --categorizer-strategy custom requires --span-patterns <file>", err=True)
+        raise typer.Exit(1)
+
+    if span_patterns is None:
+        return
+
+    from src.preprocessing.custom_span_categorizer import load_patterns
+
+    patterns_path = Path(span_patterns)
+    if not patterns_path.is_file():
+        typer.echo(f"❌ Span patterns file not found: {span_patterns}", err=True)
+        raise typer.Exit(1)
+
+    try:
+        load_patterns(patterns_path)
+    except (OSError, ValueError) as e:
+        typer.echo(f"❌ Invalid span patterns file {span_patterns}: {e}", err=True)
+        raise typer.Exit(1) from e
+
+
 @app.command()
 def preprocess(
     batch_size: int = typer.Option(10, help="Jobs per batch"),
@@ -1579,6 +1617,16 @@ def preprocess(
         "--export-requirements-json",
         help="Export full requirements JSON to file (optional)",
     ),
+    categorizer_strategy: str = typer.Option(
+        "nlp",
+        "--categorizer-strategy",
+        help="Span categorizer: nlp (POS/DEP, default) or custom (regex patterns, needs --span-patterns)",
+    ),
+    span_patterns: Optional[str] = typer.Option(
+        None,
+        "--span-patterns",
+        help="Path to span patterns JSON (required with --categorizer-strategy custom)",
+    ),
 ) -> None:
     """Preprocess job postings (clean HTML, chunk, count tokens, extract entities, extract requirements).
 
@@ -1617,6 +1665,9 @@ def preprocess(
     logger.info("Starting preprocessing")
     typer.echo("🔄 Preprocessing jobs...\n")
 
+    # Validate span categorizer options (fail fast, exit 1 on bad input)
+    _validate_categorizer_options(categorizer_strategy, span_patterns)
+
     # Validate preprocessing version (Issue #281 S5)
     clean_version = preprocessing_version.removeprefix("v")
     if clean_version not in VALID_PREPROCESSING_VERSIONS:
@@ -1648,11 +1699,17 @@ def preprocess(
 
         section_engine = SectionDetector()
 
-    preprocessor = Preprocessor(
-        extract_requirements=extract_requirements,
-        preserve_requirement_spans=True,
-        section_engine=section_engine,
-    )
+    try:
+        preprocessor = Preprocessor(
+            extract_requirements=extract_requirements,
+            preserve_requirement_spans=True,
+            section_engine=section_engine,
+            categorizer_strategy=categorizer_strategy,
+            span_patterns_path=span_patterns,
+        )
+    except (OSError, ValueError) as e:
+        typer.echo(f"❌ Failed to initialise preprocessor: {e}", err=True)
+        raise typer.Exit(1) from e
 
     all_preprocessed = []
     total_tokens = 0
