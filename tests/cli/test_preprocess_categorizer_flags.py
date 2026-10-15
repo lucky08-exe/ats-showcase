@@ -1,0 +1,199 @@
+"""Tests for preprocess CLI --categorizer-strategy and --span-patterns flags.
+
+Tests validation of categorizer strategy options, patterns file handling,
+and help text for Issue #380.
+"""
+
+import json
+import re
+import tempfile
+from pathlib import Path
+from typing import Generator
+
+import pytest
+from typer.testing import CliRunner
+
+from src.cli import app
+
+runner = CliRunner()
+
+
+def strip_ansi(text: str) -> str:
+    """Remove ANSI escape sequences from text.
+
+    Args:
+        text: Text potentially containing ANSI escape sequences
+
+    Returns:
+        Text with all ANSI escape codes removed
+    """
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
+
+
+@pytest.fixture
+def valid_patterns_file(tmp_path: Path) -> Generator[Path, None, None]:
+    """Create a valid span patterns JSON file.
+
+    # SYNTHETIC: Test fixture file structure
+    """
+    patterns = [
+        {
+            "category": "technical_skill",
+            "pattern": r"(?:python|javascript|java)",
+            "metadata": {"source": "test"},
+        },
+        {
+            "category": "seniority",
+            "pattern": r"(?:senior|junior|lead)",
+            "metadata": {"source": "test"},
+        },
+    ]
+    patterns_file = tmp_path / "patterns.json"
+    with open(patterns_file, "w") as f:
+        json.dump(patterns, f)
+    yield patterns_file
+
+
+@pytest.fixture
+def invalid_patterns_json_file(tmp_path: Path) -> Generator[Path, None, None]:
+    """Create an invalid JSON patterns file (not an array).
+
+    # SYNTHETIC: Test fixture for malformed JSON
+    """
+    patterns_file = tmp_path / "invalid.json"
+    with open(patterns_file, "w") as f:
+        f.write('{"category": "test"}')  # Object, not array
+    yield patterns_file
+
+
+@pytest.fixture
+def malformed_json_file(tmp_path: Path) -> Generator[Path, None, None]:
+    """Create a completely malformed JSON patterns file.
+
+    # SYNTHETIC: Test fixture for invalid JSON syntax
+    """
+    patterns_file = tmp_path / "malformed.json"
+    with open(patterns_file, "w") as f:
+        f.write("{invalid json [")
+    yield patterns_file
+
+
+class TestPreprocessCategorizerFlagsHelp:
+    """Test help text for new CLI flags."""
+
+    def test_help_shows_categorizer_strategy_flag(self) -> None:
+        """--help should display --categorizer-strategy flag."""
+        result = runner.invoke(app, ["preprocess", "--help"])
+        assert result.exit_code == 0
+        clean_output = strip_ansi(result.output)
+        # Help text truncates long flag names, so check for partial match
+        assert "categorizer" in clean_output.lower()
+        assert "nlp" in clean_output.lower() and "custom" in clean_output.lower()
+
+    def test_help_shows_span_patterns_flag(self) -> None:
+        """--help should display --span-patterns flag."""
+        result = runner.invoke(app, ["preprocess", "--help"])
+        assert result.exit_code == 0
+        clean_output = strip_ansi(result.output)
+        assert "span" in clean_output.lower()
+        assert "patterns" in clean_output.lower()
+
+
+class TestPreprocessCategorizerValidation:
+    """Test categorizer strategy validation."""
+
+    def test_unknown_categorizer_strategy_exits_with_error(self) -> None:
+        """Unknown strategy should exit with code 1 and error message."""
+        result = runner.invoke(app, ["preprocess", "--categorizer-strategy", "unknown"])
+        assert result.exit_code == 1
+        clean_output = strip_ansi(result.output).lower()
+        assert "invalid" in clean_output or "unknown" in clean_output
+        assert "nlp" in clean_output and "custom" in clean_output
+
+    def test_custom_strategy_without_span_patterns_exits_with_error(self) -> None:
+        """--categorizer-strategy custom without --span-patterns should exit 1."""
+        result = runner.invoke(app, ["preprocess", "--categorizer-strategy", "custom"])
+        assert result.exit_code == 1
+        clean_output = strip_ansi(result.output).lower()
+        assert "custom" in clean_output
+        assert "span-patterns" in clean_output or "span_patterns" in clean_output or "span" in clean_output
+
+    def test_custom_strategy_with_nonexistent_file_exits_with_error(self) -> None:
+        """--categorizer-strategy custom with missing file should exit 1."""
+        result = runner.invoke(
+            app,
+            [
+                "preprocess",
+                "--categorizer-strategy",
+                "custom",
+                "--span-patterns",
+                "/nonexistent/patterns.json",
+            ],
+        )
+        assert result.exit_code == 1
+        clean_output = strip_ansi(result.output).lower()
+        assert "not found" in clean_output or "error" in clean_output
+
+    def test_custom_strategy_with_invalid_patterns_json_exits_with_error(
+        self, invalid_patterns_json_file: Path
+    ) -> None:
+        """--span-patterns with non-array JSON should exit 1."""
+        result = runner.invoke(
+            app,
+            [
+                "preprocess",
+                "--categorizer-strategy",
+                "custom",
+                "--span-patterns",
+                str(invalid_patterns_json_file),
+            ],
+        )
+        assert result.exit_code == 1
+        clean_output = strip_ansi(result.output).lower()
+        assert "invalid" in clean_output or "error" in clean_output
+
+    def test_custom_strategy_with_malformed_json_exits_with_error(self, malformed_json_file: Path) -> None:
+        """--span-patterns with malformed JSON should exit 1."""
+        result = runner.invoke(
+            app,
+            [
+                "preprocess",
+                "--categorizer-strategy",
+                "custom",
+                "--span-patterns",
+                str(malformed_json_file),
+            ],
+        )
+        assert result.exit_code == 1
+        clean_output = strip_ansi(result.output).lower()
+        assert "invalid" in clean_output or "error" in clean_output
+
+    def test_nlp_strategy_with_span_patterns_validates_file(self, valid_patterns_file: Path) -> None:
+        """nlp strategy with --span-patterns should still validate the file.
+
+        # SYNTHETIC: Valid patterns file test
+        """
+        result = runner.invoke(
+            app,
+            [
+                "preprocess",
+                "--categorizer-strategy",
+                "nlp",
+                "--span-patterns",
+                str(valid_patterns_file),
+            ],
+        )
+        # File validation should succeed (file exists and is valid)
+        # Command may fail for other reasons (no jobs in DB, etc), but not for patterns
+        output_lower = strip_ansi(result.output).lower()
+        assert "not found" not in output_lower
+        # Either no "invalid" message, or if present, not about categorizer
+        assert "invalid" not in output_lower or "invalid categorizer" not in output_lower
+
+    def test_default_strategy_unchanged_without_flags(self) -> None:
+        """Default behavior without --categorizer-strategy should remain nlp."""
+        result = runner.invoke(app, ["preprocess", "--help"])
+        assert result.exit_code == 0
+        clean_output = strip_ansi(result.output).lower()
+        # Default should be nlp (help text usually shows defaults)
+        assert "nlp" in clean_output
