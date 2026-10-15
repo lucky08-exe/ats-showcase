@@ -548,7 +548,7 @@ def run_batch(
         source_config = job.get("source_config")
         if description_selector is None and source_config:
             # Per-job scoping from source_config (Issue #376); --company (global) still wins above
-            key = str(source_config)
+            key = str(source_config).strip()
             if key not in scoping_cache:
                 scoping_cache[key] = _resolve_job_scoping(key, config_dir)
             job_selector, job_match, resolve_error = scoping_cache[key]
@@ -703,6 +703,12 @@ def _resolve_description_selector(company: str, config_dir: str) -> str:
     if not description_selector:
         raise ValueError(f"Company '{company}' config found but has no 'selectors.description_selector' defined")
 
+    if not isinstance(description_selector, str):
+        raise ValueError(
+            f"Company '{company}' config has non-string 'selectors.description_selector' "
+            f"({type(description_selector).__name__})"
+        )
+
     return description_selector
 
 
@@ -759,8 +765,7 @@ def _resolve_job_scoping(source_config: str, config_dir: str) -> Tuple[Optional[
         return (
             None,
             "first",
-            f"source_config '{source_config}' not resolved (config dir '{config_dir}' or key could not be "
-            f"loaded); processing full HTML: {e}",
+            f"source_config '{source_config}' could not be resolved: {e}",
         )
     return selector, match, None
 
@@ -814,7 +819,7 @@ def main() -> int:
         try:
             description_selector = _resolve_description_selector(args.company, args.config_dir)
             description_match = _resolve_description_match(args.company, args.config_dir)
-        except ValueError as e:
+        except (ValueError, FileNotFoundError, AttributeError, TypeError) as e:
             print(f"Error: {e}", file=sys.stderr)
             return 1
 
