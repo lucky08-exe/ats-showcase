@@ -73,7 +73,7 @@ def _has_spaced_dash(span: Span) -> bool:
 #   "manage Kafka clusters on GCP and ship Terraform modules"
 # The Matcher needs VERB, so such a token never starts a match. The guard below
 # lets it start its own match when ALL of these hold:
-#   - tag NOUN and dep conj, and the lemma is in SKILL_VERBS;
+#   - tag NOUN and dep conj (or dep compound directly after and/or, #604), and the lemma is in SKILL_VERBS;
 #   - an object noun group follows (optionally after one connector).
 # "the ship and crew" fails the dep test (ship is not conj) and "and crew" has no
 # verb lemma, so noun coordination is not matched. A skill verb must also govern the
@@ -92,7 +92,11 @@ def _is_verb_tagged_noun(tok: Token) -> bool:
     coordinations under another verb ("Our team includes the design and build
     managers") have the same tags but no skill verb above them, so they do not match.
     """
-    if tok.pos_ != "NOUN" or tok.dep_ != "conj" or tok.lemma_ not in _SKILL_VERB_SET:
+    if tok.pos_ != "NOUN" or tok.lemma_ not in _SKILL_VERB_SET:
+        return False
+    # spaCy tags "mentor" in "and mentor engineers" as compound, not conj (#604).
+    after_conjunction = tok.i > 0 and _is_join_conjunction(tok.doc[tok.i - 1])
+    if tok.dep_ != "conj" and not (tok.dep_ == "compound" and after_conjunction):
         return False
     return any(anc.pos_ == "VERB" and anc.lemma_ in _SKILL_VERB_SET for anc in tok.ancestors)
 
@@ -175,6 +179,17 @@ def _conjunct_end(doc: Doc, start: int) -> int | None:
     if _verb_start_end(doc, start) is not None or _skill_verb_adjective_end(doc, start) is not None:
         return None
     return _noun_run_end(doc, start)
+
+
+def _is_committable_conjunct(doc: Doc, run_start: int, run_end: int) -> bool:
+    """True if a conjunct run may extend the span: a plain noun head or a tech term tagged VERB (#604).
+
+    An adjective-only run ("and secure.") is not a noun head and must not end the span.
+    """
+    last = doc[run_end - 1]
+    if last.pos_ == "VERB" and last.text in _TECH_TERMS_TAGGED_VERB:
+        return True
+    return _is_plain_noun_head(doc, run_start, run_end)
 
 
 def _starts_noun_run(doc: Doc, start: int) -> bool:
@@ -468,9 +483,11 @@ def _coordinated_end(doc: Doc, head_end: int) -> int:
         if run_end is None:
             break
         if commits:
-            committed = run_end
             # A committed conjunct ends the bare-noun run, so a later adjective list may open (#557).
             bare_comma_conjunct = False
+            # An adjective-only conjunct ("and secure.") is not a noun head: it does not extend the span (#604).
+            if _is_committable_conjunct(doc, run_start, run_end):
+                committed = run_end
         cursor = run_end
     return committed
 

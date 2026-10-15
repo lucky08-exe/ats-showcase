@@ -887,11 +887,12 @@ class TestSkillExtractorAdjectiveListComma:
         """'design systems, scalable, reliable platforms' keeps only the head (#557)."""
         assert extractor.extract("You will design systems, scalable, reliable platforms.") == ["design systems"]
 
-    def test_noun_before_comma_with_adjective_pair_unchanged(self, extractor):
-        """'design systems, scalable and resilient' keeps the existing tentative-comma result."""
-        assert extractor.extract("You will design systems, scalable and resilient.") == [
-            "design systems, scalable and resilient"
-        ]
+    def test_noun_before_comma_with_adjective_pair_keeps_head(self, extractor):
+        """'design systems, scalable and resilient': the adjective-only tail is not a noun head (#604).
+
+        Was merged into the span before #604. Matches 'design systems, scalable, reliable platforms'.
+        """
+        assert extractor.extract("You will design systems, scalable and resilient.") == ["design systems"]
 
     def test_serial_noun_list_unchanged(self, extractor):
         """A serial list of separate nouns with a verb conjunct is unchanged (#509)."""
@@ -986,7 +987,7 @@ class TestSkillExtractorAdjectiveListComma:
         """A plain adverb after a skill verb with no adjective list is not a skill (#588)."""
         assert extractor.extract("You will design quickly.") == []
 
-    def test_adverb_led_list_rejects_skill_verb_segment(self, extractor):
+    def test_adverb_led_list_keeps_skill_verb_segment_own_span(self, extractor):
         """A skill-verb segment ('lead') after an ADV-led list is a verb, not a premodifier (#599).
 
         No merged 'design fast, lead teams' span. The verb heads its own span (#604).
@@ -996,12 +997,13 @@ class TestSkillExtractorAdjectiveListComma:
     def test_adverb_led_list_rejects_skill_verb_segment_in_serial_list(self, extractor):
         """No span starts at the ADV-led head when a skill-verb segment closes the list (#599).
 
-        The 'design quickly' head is never merged with the verb segment. The verb span
-        ('lead teams', #604) is kept; its coordinated tail is a spaCy parse artefact.
+        'lead teams' stays its own span and 'and mentor engineers' is a separate verb-led
+        span: the skill verb after 'and' does not merge into 'lead teams' (#604).
         """
-        skills = extractor.extract("You will design quickly, lead teams, and mentor engineers.")
-        assert not any(s.startswith("design") for s in skills)
-        assert any(s.startswith("lead teams") for s in skills)
+        assert extractor.extract("You will design quickly, lead teams, and mentor engineers.") == [
+            "lead teams",
+            "mentor engineers",
+        ]
 
     def test_adverb_led_list_coordinated_verb_pinned(self, extractor):
         """ADV-led list after a coordinated verb: current output pinned (#599)."""
@@ -1091,6 +1093,17 @@ class TestSkillExtractorResidualsWave604:
                 "You will develop quickly, secure and reliable APIs.",
                 ["develop quickly, secure and reliable apis"],
             ),
+            # 1b. An adjective-only conjunct does not end the span; a noun-headed conjunct does.
+            ("You will design fast, reliable services and secure.", ["design fast, reliable services"]),
+            ("You will design systems and secure.", ["design systems"]),
+            ("You will design systems and secure platforms.", ["design systems and secure platforms"]),
+            (
+                "You will design fast, reliable services and secure platforms.",
+                ["design fast, reliable services and secure platforms"],
+            ),
+            # 1c. A skill verb after 'and' is its own span, whatever spaCy tags it (#604).
+            ("You will design systems and mentor engineers.", ["design systems", "mentor engineers"]),
+            ("You will design systems and build tools.", ["build tools", "design systems"]),
             # 6. Hyphenated adjectives after an adverb continue the list.
             (
                 "You will design fast, self-healing, data-driven platforms.",
@@ -1117,6 +1130,8 @@ class TestSkillExtractorResidualsWave604:
             ("You will design fast, lead teams.", ["lead teams"]),
             # Adjective-list heads unchanged.
             ("You will lead agile, platform teams.", ["lead agile"]),
+            # Neighbour shape: a noun list after a non-skill verb produces nothing (#604).
+            ("Experience with APIs, model training.", []),
             ("You will design fault-tolerant, data services.", ["design fault-tolerant"]),
         ],
     )
