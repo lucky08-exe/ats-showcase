@@ -130,7 +130,7 @@ Full walkthrough (CLI examples, JobStore usage, cost analysis): [docs/dev-note/p
 Code sample: [docs/dev-note/preprocess-phase2-and-phase8-detail.md](../../docs/dev-note/preprocess-phase2-and-phase8-detail.md#span-categorizer-strategy-code-sample-issue-278).
 
 - `custom` requires `patterns`; patterns are validated (500-char cap, nested-quantifier ReDoS heuristic) and input text is capped at 200k chars.
-- `CustomSpanCategorizer(patterns).categorize(text)` is spaCy-free. The spaCy wrapper is registered as a pipeline factory (#381, #618); no CLI flag yet (#380).
+- `CustomSpanCategorizer(patterns).categorize(text)` is spaCy-free. The spaCy wrapper is registered as a pipeline factory (#381, #618). CLI: `--categorizer-strategy nlp|custom`, `--span-patterns <json>` (#380).
 - Tests for the strategies are model-free; 11 older spaCy-model tests need `en_core_web_md` (#383).
 
 See `docs/dev-note/phase8/span_algorithm.md` for algorithm pseudocode, boundary rules, edge cases.
