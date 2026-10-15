@@ -78,8 +78,9 @@ def _is_tech_context(doc, ent, other_techs):
     prev = doc[ent.start - 1] if ent.start > 0 else None
     if nxt is not None and nxt.lower_ == "-":
         after = doc[ent.end + 1] if ent.end + 1 < len(doc) else None
-        if after is None or after.lower_ not in _HYPHEN_TECH_SUFFIXES:
-            return False
+        if after is not None and after.lower_ in _HYPHEN_TECH_SUFFIXES:
+            return True
+        return False
     next_cues = _LIGHTNING_NEXT_CUES if word in _PREV_CUE_INSUFFICIENT else _NEXT_CUES
     if nxt is not None and (nxt.lower_ in next_cues or doc.text[nxt.idx :].startswith(".js")):
         return True

@@ -673,14 +673,6 @@ class TestTechExtractorIssue513:
         assert "spring boot" in techs
         assert "spring" not in techs
 
-    def test_go_to_market_not_extracted(self, extractor, nlp):
-        """#513: 'Go' inside the hyphenated English compound 'Go-to-market' is not the language."""
-        assert "go" not in extractor.extract(nlp("Experience with Go-to-market strategy."))
-
-    def test_go_based_still_extracted(self, extractor, nlp):
-        """Positive control: a tech qualifier after the hyphen keeps 'Go' as tech."""
-        assert "go" in extractor.extract(nlp("Experience with Go-based services."))
-
     def test_grpc_extracted_alongside_go(self, extractor, nlp):
         """#513: 'gRPC' is a TECH term; 'Built with Go and gRPC.' yields both."""
         techs = extractor.extract(nlp("Built with Go and gRPC."))
@@ -688,19 +680,30 @@ class TestTechExtractorIssue513:
 
 
 class TestTechExtractorHyphenSuffix553:
-    """#553: a hyphen after an ambiguous term keeps it as tech only before a tech suffix."""
+    """#553: a hyphen followed by a tech suffix (based/native/lang/like) is tech evidence for an ambiguous term."""
 
     @pytest.mark.parametrize(
         "text",
         [
-            "Experience with Go-based services.",
-            "Experience with Go-native services.",
-            "Experience with Go-lang services.",
+            "Build Go-native microservices.",
+            "Write Go-lang services.",
+            "Maintain Go-based services.",
         ],
     )
     def test_go_tech_suffix_extracted(self, extractor, nlp, text):
-        """Positive controls: _HYPHEN_TECH_SUFFIXES keeps 'Go' as the language."""
+        """No PREV/NEXT cue word in these sentences: the suffix rule alone keeps 'Go'."""
         assert "go" in extractor.extract(nlp(text))
+
+    @pytest.mark.parametrize(
+        "text,expected",
+        [
+            ("Ship Spring-based apps.", "spring"),
+            ("Ship Vue-based apps.", "vue"),
+        ],
+    )
+    def test_hyphen_based_tech_extracted(self, extractor, nlp, text, expected):
+        """No PREV/NEXT cue word in these sentences: the 'based' suffix alone keeps the ambiguous term."""
+        assert expected in extractor.extract(nlp(text))
 
     @pytest.mark.parametrize(
         "text",
@@ -710,32 +713,10 @@ class TestTechExtractorHyphenSuffix553:
         ],
     )
     def test_go_english_compound_not_extracted(self, extractor, nlp, text):
-        """Negatives: 'Go' followed by a hyphen and a non-tech word is an English compound."""
+        """'Go' followed by a hyphen and a non-suffix word ('live', 'to') is an English compound."""
         assert "go" not in extractor.extract(nlp(text))
 
-    @pytest.mark.parametrize(
-        "text,expected",
-        [
-            ("Experience with Spring-based services.", "spring"),
-            ("Experience with Vue-based apps.", "vue"),
-        ],
-    )
-    def test_hyphen_based_tech_extracted(self, extractor, nlp, text, expected):
-        """Positive controls: the 'based' suffix keeps a non-ambiguous term as tech."""
-        assert expected in extractor.extract(nlp(text))
-
-    @pytest.mark.xfail(strict=True, reason="#553: 'Build' has no cue, so the cue gate drops 'Go-native'")
-    def test_build_go_native_extracted(self, extractor, nlp):
-        """Known gap: a tech suffix with no other cue is still tech evidence."""
-        assert "go" in extractor.extract(nlp("Build Go-native microservices."))
-
-    @pytest.mark.xfail(strict=True, reason="#553: 'Write' has no cue, so the cue gate drops 'Go-lang'")
-    def test_write_go_lang_extracted(self, extractor, nlp):
-        """Known gap: 'Go-lang' with no other cue is dropped by the cue gate."""
-        assert "go" in extractor.extract(nlp("Write Go-lang services."))
-
-    @pytest.mark.xfail(strict=True, reason="#553: 'Spring-based' is dropped when adjacent to 'Go'")
     def test_go_and_spring_based_both_extracted(self, extractor, nlp):
-        """Known gap: the hyphen-suffix term 'Spring-based' is lost next to 'Go and'."""
+        """'Spring-based' passes via the suffix rule; 'Go' via the 'with' cue. Not an adjacency fix."""
         techs = extractor.extract(nlp("Experience with Go and Spring-based services."))
         assert {"go", "spring"} <= set(techs)
