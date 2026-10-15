@@ -244,19 +244,20 @@ uv run python -m src.cli assess --cv data/cv.json --use-v3-requirements
 ## Known Gaps & Limitations
 
 ### Issue #380: CLI Flag for Span Strategies
-**Status:** Open
+**Status:** Resolved (closed 2026-10-15)
 
-Section/requirement extraction supports multiple strategies (spaCy NLP, regex-based custom).
-CLI currently exposes `--preprocessing-version 3.0` but not `--span-strategy`.
-
-**Workaround:** Programmatic API only (no CLI control yet).
+CLI exposes `--categorizer-strategy nlp|custom` and `--span-patterns <json>` on the
+`preprocess` command (`src/cli.py` ~L1619-1627).
 
 ### Issue #381: Span Categorizer Not Registered as Pipeline Factory
-**Status:** Open
+**Status:** Resolved in code (PR #618); GitHub issue still open pending closure
 
-Phase 8b `span_categorizer` component is not registered for use in CLI `--add-pipe` commands.
-
-**Workaround:** Preprocessor hard-registers it in `_load_model()`.
+`custom_span_categorizer` is registered via `@Language.factory` in
+`src/preprocessing/custom_span_categorizer.py` (~L466), backing the
+`--categorizer-strategy custom` CLI path. The default NLP-strategy pipeline still
+hard-registers `span_categorizer` directly in `Preprocessor._load_model()`
+(`src/tokenization/preprocessor.py` L160-197) — that is separate, intentional
+behavior, not a remaining gap.
 
 ### Issue #383: Model-Required Tests for SpaCy Spans
 **Status:** Open
