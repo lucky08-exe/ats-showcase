@@ -1175,3 +1175,55 @@ class TestPerJobSourceConfigScoping:
 
         alpha_result = next(r for r in results if r.job_id == "alpha")
         assert not [w for w in alpha_result.warnings if w[0] == "source_config"]
+
+    def test_cli_config_dir_forwarded_to_run_batch_without_company(self, tmp_path, monkeypatch):
+        """Test that --config-dir reaches run_batch without --company (per-job source_config resolution)."""
+        import sys
+
+        import src.poc.tweak.batch_processor as bp
+
+        config_dir = tmp_path / "custom_configs"
+        config_dir.mkdir()
+        input_file = tmp_path / "jobs.json"
+        input_file.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "alpha",
+                        "title": "Dev",
+                        "company": "Alpha",
+                        "description": "text",
+                        "source_config": "alpha",
+                    },
+                    {"id": "beta", "title": "Dev", "company": "Beta", "description": "text"},
+                ]
+            )
+        )
+
+        recorded: dict = {}
+
+        def fake_run_batch(input_path, **kwargs):
+            recorded["input_path"] = input_path
+            recorded.update(kwargs)
+            return []
+
+        monkeypatch.setattr(bp, "run_batch", fake_run_batch)
+        monkeypatch.setattr(bp, "print_summary", lambda results: None)
+        old_argv = sys.argv
+        try:
+            sys.argv = [
+                "batch_processor",
+                "--input-path",
+                str(input_file),
+                "--config-dir",
+                str(config_dir),
+            ]
+            exit_code = bp.main()
+        finally:
+            sys.argv = old_argv
+
+        assert exit_code == 0
+        assert recorded["input_path"] == str(input_file)
+        assert recorded["config_dir"] == str(config_dir)
+        assert recorded["config_dir"] != "config_test"
+        assert recorded["description_selector"] is None

@@ -483,7 +483,8 @@ def run_batch(
         description_selector: Optional CSS selector to scope HTML fragments. When set,
                           applies to every job and disables per-job resolution.
         description_match: Strategy for multi-match selection ("first", "all", "longest").
-                          Default "first". Only used with a global description_selector.
+                          Default "first". Applies to the global description_selector and to
+                          records without source_config; resolved source_config match wins otherwise.
         promote_headings: Whether to promote plain-text headings (default True, Issue #365)
         config_dir: Directory of company config JSON files used to resolve per-job
                           selectors from ``source_config`` (default "config_test")
@@ -774,13 +775,13 @@ def main() -> int:
         "--company",
         type=str,
         default=None,
-        help="Company config key or name to resolve description_selector from (optional, requires --config-dir)",
+        help="Company config key or name; selector applies to ALL records, overriding source_config (optional)",
     )
     parser.add_argument(
         "--config-dir",
         type=str,
         default="config_test",
-        help="Directory containing company config JSON files (default: config_test)",
+        help="Company config JSON directory; also resolves each record's source_config (default: config_test)",
     )
     parser.add_argument(
         "--no-promote-headings",
@@ -807,6 +808,7 @@ def main() -> int:
             description_selector=description_selector,
             description_match=description_match,
             promote_headings=not args.no_promote_headings,
+            config_dir=args.config_dir,
         )
         print_summary(results)
 
