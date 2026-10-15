@@ -245,6 +245,21 @@ def _is_adjectival(tok: Token) -> bool:
     return tok.pos_ == "ADJ" or _is_amod_participle(tok)
 
 
+def _is_adjectival_segment(doc: Doc, seg: int) -> bool:
+    if _is_adjectival(doc[seg]):
+        return True
+    if not _is_glued_hyphen(doc, seg + 1) or seg + 2 >= len(doc):
+        return False
+    last = doc[seg + 2]
+    return last.pos_ == "ADJ" or last.tag_ in ("VBN", "VBG")
+
+
+def _segment_run_end(doc: Doc, seg: int) -> int | None:
+    if _is_glued_hyphen(doc, seg + 1) and not _starts_noun_run(doc, seg) and seg + 2 < len(doc):
+        return _noun_run_end(doc, seg + 2)
+    return _noun_run_end(doc, seg)
+
+
 def _is_verb_led_adverb(doc: Doc, idx: int) -> bool:
     """True for an ADV tagged token directly after a skill verb ("design fast, ...") (#588)."""
     return doc[idx].pos_ == "ADV" and idx > 0 and doc[idx - 1].pos_ == "VERB" and doc[idx - 1].lemma_ in _SKILL_VERB_SET
@@ -286,11 +301,11 @@ def _adjective_list_end(doc: Doc, comma: int, *, adverb_led: bool = False) -> in
         closes = seg < len(doc) and _is_join_conjunction(doc[seg])
         if closes:
             seg += 1
-        if seg >= len(doc) or not _is_adjectival(doc[seg]):
+        if seg >= len(doc) or not _is_adjectival_segment(doc, seg):
             break
         if adverb_led and doc[seg].lemma_ in _SKILL_VERB_SET:
             break
-        run_end = _noun_run_end(doc, seg)
+        run_end = _segment_run_end(doc, seg)
         if run_end is None:
             # A participle adjective before a comma ("distributed," #585) is a segment, not a head.
             if closes or seg + 1 >= len(doc) or doc[seg + 1].text != ",":
