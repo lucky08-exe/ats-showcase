@@ -1250,6 +1250,133 @@ class TestPerJobSourceConfigScoping:
         assert len(recorded_calls) == 3
         assert all(c["description_selector"] == ".alpha-desc" for c in recorded_calls)
 
+    def test_top_level_array_config_degrades_to_unscoped_without_abort(self, tmp_path, recorded_calls):
+        """Top-level JSON array config (AttributeError in loader): batch continues, job unscoped, warning recorded."""
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "companies.json").write_text(json.dumps([1, 2]))
+        input_file = self._write_jobs(tmp_path, [self._record("alpha", "AlphaCo")])
+
+        results = run_batch(str(input_file), config_dir=str(config_dir))
+
+        assert len(results) == 1
+        assert len(recorded_calls) == 1
+        assert recorded_calls[0]["description_selector"] is None
+        assert recorded_calls[0]["description_match"] == "first"
+        source_warnings = [w for w in results[0].warnings if w[0] == "source_config"]
+        assert len(source_warnings) == 1
+        assert "not resolved" in source_warnings[0][1]
+        assert not results[0].has_errors()
+
+    def test_null_name_company_with_unknown_source_config_does_not_abort(self, tmp_path, recorded_calls):
+        """Another entry with "name": null plus unknown source_config (NoneType.lower): batch continues."""
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "companies.json").write_text(
+            json.dumps(
+                {
+                    "companies": {
+                        "NullNameCo": {"name": None, "selectors": {"description_selector": ".n"}},
+                        "AlphaCo": {
+                            "name": "Alpha Co",
+                            "selectors": {"description_selector": ".alpha-desc"},
+                        },
+                    }
+                }
+            )
+        )
+        input_file = self._write_jobs(
+            tmp_path,
+            [self._record("ghost", "NoSuchCo"), self._record("alpha", "AlphaCo")],
+        )
+
+        results = run_batch(str(input_file), config_dir=str(config_dir))
+
+        assert len(results) == 2
+        by_id = {c["job_id"]: c for c in recorded_calls}
+        assert by_id["ghost"]["description_selector"] is None
+        assert by_id["ghost"]["description_match"] == "first"
+        assert by_id["alpha"]["description_selector"] == ".alpha-desc"
+
+        ghost_result = next(r for r in results if r.job_id == "ghost")
+        source_warnings = [w for w in ghost_result.warnings if w[0] == "source_config"]
+        assert len(source_warnings) == 1
+        assert "not resolved" in source_warnings[0][1]
+        assert not ghost_result.has_errors()
+
+    def test_non_dict_company_value_degrades_to_unscoped_without_abort(self, tmp_path, recorded_calls):
+        """Non-dict company value ("AlphaCo": "x", AttributeError in resolver): batch continues, jobs unscoped."""
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "companies.json").write_text(
+            json.dumps({"companies": {"AlphaCo": "x", "BetaCo": {"name": "Beta Co", "selectors": {}}}})
+        )
+        input_file = self._write_jobs(
+            tmp_path,
+            [self._record("alpha", "AlphaCo"), self._record("beta", "BetaCo")],
+        )
+
+        results = run_batch(str(input_file), config_dir=str(config_dir))
+
+        assert len(results) == 2
+        assert len(recorded_calls) == 2
+        for call in recorded_calls:
+            assert call["description_selector"] is None
+            assert call["description_match"] == "first"
+        for result in results:
+            source_warnings = [w for w in result.warnings if w[0] == "source_config"]
+            assert len(source_warnings) == 1
+            assert "not resolved" in source_warnings[0][1]
+            assert not result.has_errors()
+
+    def test_list_description_selector_match_falls_back_to_first_without_abort(self, tmp_path):
+        """Unhashable description_selector_match (list) from source_config: html_scoping warning, batch continues."""
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "companies.json").write_text(
+            json.dumps(
+                {
+                    "companies": {
+                        "AlphaCo": {
+                            "name": "Alpha Co",
+                            "selectors": {
+                                "description_selector": ".desc",
+                                "description_selector_match": ["all"],
+                            },
+                        },
+                    }
+                }
+            )
+        )
+        input_file = self._write_jobs(
+            tmp_path,
+            [
+                {
+                    "id": "alpha",
+                    "title": "Dev",
+                    "company": "Alpha Co",
+                    "description": '<div class="desc">First match</div><div class="desc">Second match</div>',
+                    "source_config": "AlphaCo",
+                },
+                {
+                    "id": "plain",
+                    "title": "Dev",
+                    "company": "X",
+                    "description": "<p>No scoping here</p>",
+                },
+            ],
+        )
+
+        results = run_batch(str(input_file), config_dir=str(config_dir))
+
+        assert len(results) == 2
+        alpha_result = next(r for r in results if r.job_id == "alpha")
+        html_scope_warnings = [w[1] for w in alpha_result.warnings if w[0] == "html_scoping"]
+        assert any("Invalid description_selector_match value" in w for w in html_scope_warnings)
+        assert any("falling back to 'first'" in w for w in html_scope_warnings)
+        assert not alpha_result.has_errors()
+        assert not [w for w in alpha_result.warnings if w[0] == "source_config"]
+
     def test_cli_config_dir_forwarded_to_run_batch_without_company(self, tmp_path, monkeypatch):
         """Test that --config-dir reaches run_batch without --company (per-job source_config resolution)."""
         import sys

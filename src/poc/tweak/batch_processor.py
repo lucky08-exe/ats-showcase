@@ -244,7 +244,9 @@ def process_job(
     if description_selector:
         # Validate description_match strategy (only when selector is provided)
         effective_strategy = description_match
-        if description_match not in DESCRIPTION_MATCH_STRATEGIES:
+        # isinstance guard: an unhashable value (e.g. list from malformed config) would raise TypeError
+        # on set membership and abort the batch; treat it as invalid instead.
+        if not isinstance(description_match, str) or description_match not in DESCRIPTION_MATCH_STRATEGIES:
             # Invalid strategy: log warning and use "first"
             result.add_warning(
                 "html_scoping",
@@ -478,9 +480,10 @@ def run_batch(
     are resolved from its ``source_config`` key (Issue #376). A global
     ``description_selector`` (e.g. from ``--company``) overrides this for all jobs.
     A ``source_config`` that cannot be resolved (missing config dir, unknown key,
-    unparsable config) does not fail the batch: the job is processed unscoped and a
-    ``source_config`` warning is recorded on that job. The warning is recorded per
-    affected job; the per-key cache only avoids reloading the config.
+    unparsable or malformed config) does not fail the batch: the job is processed unscoped
+    and a ``source_config`` warning is recorded on that job. The warning is recorded per
+    affected job. Each distinct ``source_config`` is resolved once per batch (cache keyed by
+    key); a cache miss loads the company configs twice (once for selector, once for match).
 
     Args:
         input_path: Path to JSON file with job records
@@ -536,7 +539,7 @@ def run_batch(
 
     # Process all jobs
     results = []
-    # Cache of source_config -> (selector, match, error) so each company config is loaded once
+    # Cache of source_config -> (selector, match, error): skips re-resolving a key already seen in this batch
     scoping_cache: Dict[str, Tuple[Optional[str], str, Optional[str]]] = {}
     for job in jobs:
         job_selector = description_selector
@@ -741,15 +744,18 @@ def _resolve_description_match(company: str, config_dir: str) -> str:
 def _resolve_job_scoping(source_config: str, config_dir: str) -> Tuple[Optional[str], str, Optional[str]]:
     """Resolve (description_selector, description_match, error) for one source_config key (Issue #376).
 
-    Never raises. On ValueError (unknown key, missing selector, unparsable config) or
-    OSError (config dir missing, e.g. FileNotFoundError) returns (None, "first", message)
-    so the job is processed unscoped, matching the no-source_config default; the caller
-    records the message as a ``source_config`` warning on each affected job.
+    Never raises. On any failure (ValueError for unknown key / missing selector / unparsable
+    config, OSError for a missing config dir, or AttributeError/TypeError from a malformed
+    config shape such as a top-level JSON array or a non-dict company value) returns
+    (None, "first", message) so the job is processed unscoped, matching the no-source_config
+    default; the caller records the message as a ``source_config`` warning on each affected job.
     """
     try:
         selector = _resolve_description_selector(source_config, config_dir)
         match = _resolve_description_match(source_config, config_dir)
-    except (ValueError, OSError) as e:
+    except Exception as e:
+        # Deliberately broad: user-supplied config JSON can have any shape, and a malformed
+        # config must never abort the whole batch. Degrade this key to unscoped instead.
         return (
             None,
             "first",
