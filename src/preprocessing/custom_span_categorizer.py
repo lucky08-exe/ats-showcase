@@ -129,6 +129,12 @@ def validate_pattern(pattern: str) -> None:
       - Ambiguity across sibling groups, e.g. (a|b)*(a|b)*, is not detected.
       - Escaped metacharacters are compared as written, so (\\.|.)+ is
         not detected.
+      - The pre-existing nested-quantifier check misses multi-level wrappers
+        separated by more than one ``)``: ``((a+))+`` is accepted (inherited
+        from main, not introduced here); ``(a+)+`` and ``((a*)*)+`` are rejected.
+      - A ``(?i`` flag anywhere in the pattern (including a scoped ``(?i:...)``)
+        enables case-insensitive branch comparison for every group in the
+        pattern, which can over-reject.
 
     Args:
         pattern: Regex pattern string to validate.
