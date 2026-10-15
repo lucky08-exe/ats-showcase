@@ -28,23 +28,127 @@ if not Doc.has_extension("custom_spans"):
     Doc.set_extension("custom_spans", default=None)
 
 
+# Quantifier that makes a group repeatable: +, *, {n,}, {n,m}, plus an
+# optional lazy (?) or possessive (+) suffix. Exact {n} is not flagged.
+_REPEAT_AFTER_GROUP = re.compile(r"(?:[+*]|\{\d*,\d*\})[?+]?")
+
+# Group header that is not part of the alternation body: (?:, (?=, (?!,
+# (?<=, (?<!, (?P<name>, scoped inline flags such as (?i: or (?-i:.
+_GROUP_HEADER = re.compile(r"\?(?:P<\w+>|<[=!]|[=!:]|[aiLmsux]*(?:-[imsx]+)?:)")
+
+# Inline flag group that enables case-insensitive matching somewhere.
+_CASE_INSENSITIVE_FLAG = re.compile(r"\(\?[aiLmsux]*i")
+
+
+def _skip_char_class(pattern: str, start: int) -> int:
+    """Return index just past the character class opened at ``start``.
+
+    Handles a leading ``^``, a leading literal ``]``, and backslash escapes.
+    Returns ``len(pattern)`` if the class is unterminated.
+    """
+    n = len(pattern)
+    j = start + 1
+    if j < n and pattern[j] == "^":
+        j += 1
+    if j < n and pattern[j] == "]":
+        j += 1
+    while j < n and pattern[j] != "]":
+        j += 2 if pattern[j] == "\\" else 1
+    return min(j + 1, n)
+
+
+def _branches_overlap(branches: list[str], case_insensitive: bool) -> bool:
+    """Return True if any two branches are equal or one is a prefix of the other."""
+    norm = [b.casefold() if case_insensitive else b for b in branches]
+    for i, left in enumerate(norm):
+        for right in norm[i + 1 :]:
+            if left.startswith(right) or right.startswith(left):
+                return True
+    return False
+
+
+def _has_overlapping_repeated_alternation(pattern: str) -> bool:
+    """Scan pattern for a repeated group whose alternation branches overlap.
+
+    Tracks escapes, character classes and group nesting so that only the
+    top-level branches of each group are compared. Never raises: malformed
+    input is left for ``re.compile`` to report.
+    """
+    case_insensitive = _CASE_INSENSITIVE_FLAG.search(pattern) is not None
+    # Each open group: (index where the current branch starts, finished branches)
+    stack: list[tuple[int, list[str]]] = []
+    n = len(pattern)
+    i = 0
+    while i < n:
+        ch = pattern[i]
+        if ch == "\\":
+            i += 2
+            continue
+        if ch == "[":
+            i = _skip_char_class(pattern, i)
+            continue
+        if ch == "(":
+            header = _GROUP_HEADER.match(pattern, i + 1)
+            body_start = header.end() if header else i + 1
+            stack.append((body_start, []))
+            i = body_start
+            continue
+        if ch == "|" and stack:
+            start, branches = stack[-1]
+            branches.append(pattern[start:i])
+            stack[-1] = (i + 1, branches)
+        elif ch == ")" and stack:
+            start, branches = stack.pop()
+            branches.append(pattern[start:i])
+            repeated = _REPEAT_AFTER_GROUP.match(pattern, i + 1) is not None
+            if repeated and len(branches) > 1 and _branches_overlap(branches, case_insensitive):
+                return True
+        i += 1
+    return False
+
+
 def validate_pattern(pattern: str) -> None:
     """Validate regex pattern for safety and correctness.
 
-    Checks pattern length and detects ReDoS-prone nested quantifiers
-    like (a+)+, (a*)*. Lazy quantifiers (+?, *?) are safe and not flagged.
+    Checks pattern length, detects ReDoS-prone nested quantifiers like
+    (a+)+, (a*)*, and rejects repeated groups whose alternation branches
+    overlap, like (a|aa)+ or (x|xy){2,}. Lazy quantifiers (+?, *?) are
+    safe and not flagged.
+
+    The alternation check is a static heuristic, not a regex engine
+    analysis. It compares the raw text of each branch of a group followed
+    by +, *, {n,} or {n,m} (optionally with a ? or + suffix). A group is
+    rejected when two branches are equal or one is a textual prefix of the
+    other. Case is folded only when the pattern contains an inline (?i)
+    style flag. Known limits:
+      - Overlap via character classes, ``.``, or ``\\w``-style escapes is
+        not detected, e.g. (\\w+|x)+ or (a|[a])+.
+      - Textual prefixes that never overlap in practice are rejected, e.g.
+        (a|a\\d)+ (a false positive).
+      - Exact counts {n} are not checked, e.g. (a|aa){3}.
+      - Ambiguity across sibling groups, e.g. (a|b)*(a|b)*, is not detected.
+      - Escaped metacharacters are compared as written, so (\\.|.)+ is
+        not detected.
+      - The pre-existing nested-quantifier check misses multi-level wrappers
+        separated by more than one ``)``: ``((a+))+`` is accepted (inherited
+        from main, not introduced here); ``(a+)+`` and ``((a*)*)+`` are rejected.
+      - A ``(?i`` flag anywhere in the pattern (including a scoped ``(?i:...)``)
+        enables case-insensitive branch comparison for every group in the
+        pattern, which can over-reject.
 
     Args:
         pattern: Regex pattern string to validate.
 
     Raises:
         ValueError: If pattern exceeds length limit, contains ReDoS-prone
-            nested quantifiers, or fails to compile.
+            nested quantifiers or overlapping repeated alternation, or
+            fails to compile.
 
     Examples:
         >>> validate_pattern("a+b")  # OK
         >>> validate_pattern("a+?b")  # OK (lazy quantifier)
         >>> validate_pattern("(a+)+")  # Raises ValueError (ReDoS)
+        >>> validate_pattern("(a|aa)+")  # Raises ValueError (ReDoS)
     """
     if len(pattern) > MAX_PATTERN_LENGTH:
         raise ValueError(f"Pattern exceeds max length {MAX_PATTERN_LENGTH}: {len(pattern)}")
@@ -58,6 +162,10 @@ def validate_pattern(pattern: str) -> None:
     redos_pattern = r"[+*}]\)?[+*{]"
     if re.search(redos_pattern, stripped):
         raise ValueError(f"Pattern contains ReDoS-prone nested quantifiers: {pattern}")
+
+    # Check for repeated groups with overlapping alternation branches
+    if _has_overlapping_repeated_alternation(pattern):
+        raise ValueError(f"Pattern contains ReDoS-prone overlapping alternation: {pattern}")
 
     try:
         re.compile(pattern)
