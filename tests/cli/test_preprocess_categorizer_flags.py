@@ -6,7 +6,6 @@ and help text for Issue #380.
 
 import json
 import re
-import tempfile
 from pathlib import Path
 from typing import Generator
 
@@ -168,11 +167,18 @@ class TestPreprocessCategorizerValidation:
         clean_output = strip_ansi(result.output).lower()
         assert "invalid" in clean_output or "error" in clean_output
 
-    def test_nlp_strategy_with_span_patterns_validates_file(self, valid_patterns_file: Path) -> None:
+    def test_nlp_strategy_with_span_patterns_validates_file(
+        self, valid_patterns_file: Path, tmp_path: Path, monkeypatch
+    ) -> None:
         """nlp strategy with --span-patterns should still validate the file.
 
         # SYNTHETIC: Valid patterns file test
         """
+        # Chdir to tmp_path and create empty extracted_jobs dir so preprocess
+        # doesn't fail with "Directory not found" before reaching patterns validation
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "data" / "extracted_jobs").mkdir(parents=True, exist_ok=True)
+
         result = runner.invoke(
             app,
             [
@@ -186,9 +192,11 @@ class TestPreprocessCategorizerValidation:
         # File validation should succeed (file exists and is valid)
         # Command may fail for other reasons (no jobs in DB, etc), but not for patterns
         output_lower = strip_ansi(result.output).lower()
-        assert "not found" not in output_lower
-        # Either no "invalid" message, or if present, not about categorizer
-        assert "invalid" not in output_lower or "invalid categorizer" not in output_lower
+        # Assert the span-patterns validation did NOT fail
+        assert "span patterns file not found" not in output_lower
+        assert "invalid span patterns file" not in output_lower
+        # Verify we got past the categorizer strategy validation (nlp is valid)
+        assert "invalid categorizer strategy" not in output_lower
 
     def test_default_strategy_unchanged_without_flags(self) -> None:
         """Default behavior without --categorizer-strategy should remain nlp."""

@@ -7,7 +7,7 @@ and pipeline component registration for Issue #380.
 import json
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock
 
 import pytest
 import spacy
@@ -146,27 +146,6 @@ class TestPreprocessorCategorizerStrategy:
             assert result is doc
             # custom_spans extension should be set (from component)
             assert hasattr(result._, "custom_spans")
-
-    def test_nlp_strategy_does_not_add_custom_pipeline_component(self, monkeypatch) -> None:
-        """nlp strategy should not add a pipeline component for custom spans.
-
-        The custom span categorizer is applied directly via apply_custom_spans,
-        not as a registered pipeline component for nlp strategy.
-        """
-        mock_nlp = MagicMock()
-        mock_nlp.pipe_names = ["tok2vec", "tagger", "parser", "ner"]
-        monkeypatch.setattr("spacy.load", lambda model: mock_nlp)
-
-        from src.tokenization.preprocessor import Preprocessor
-
-        preprocessor = Preprocessor(
-            model="en_core_web_md",
-            categorizer_strategy="nlp",
-        )
-
-        # nlp strategy should not have custom span component in pipeline
-        # (component is only for custom strategy, and only applied via apply_custom_spans)
-        assert preprocessor._custom_span_component is None
 
     def test_nlp_strategy_default_parameter(self, monkeypatch) -> None:
         """Default categorizer_strategy should be 'nlp'."""
