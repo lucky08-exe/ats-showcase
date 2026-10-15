@@ -106,16 +106,16 @@ class TestPreprocessCategorizerValidation:
         result = runner.invoke(app, ["preprocess", "--categorizer-strategy", "unknown"])
         assert result.exit_code == 1
         clean_output = strip_ansi(result.output).lower()
-        assert "invalid" in clean_output or "unknown" in clean_output
-        assert "nlp" in clean_output and "custom" in clean_output
+        assert "invalid categorizer strategy" in clean_output
+        assert "traceback" not in clean_output
 
     def test_custom_strategy_without_span_patterns_exits_with_error(self) -> None:
         """--categorizer-strategy custom without --span-patterns should exit 1."""
         result = runner.invoke(app, ["preprocess", "--categorizer-strategy", "custom"])
         assert result.exit_code == 1
         clean_output = strip_ansi(result.output).lower()
-        assert "custom" in clean_output
-        assert "span-patterns" in clean_output or "span_patterns" in clean_output or "span" in clean_output
+        assert "--span-patterns" in clean_output
+        assert "traceback" not in clean_output
 
     def test_custom_strategy_with_nonexistent_file_exits_with_error(self) -> None:
         """--categorizer-strategy custom with missing file should exit 1."""
@@ -131,7 +131,8 @@ class TestPreprocessCategorizerValidation:
         )
         assert result.exit_code == 1
         clean_output = strip_ansi(result.output).lower()
-        assert "not found" in clean_output or "error" in clean_output
+        assert "span patterns file not found" in clean_output
+        assert "traceback" not in clean_output
 
     def test_custom_strategy_with_invalid_patterns_json_exits_with_error(
         self, invalid_patterns_json_file: Path
@@ -149,7 +150,8 @@ class TestPreprocessCategorizerValidation:
         )
         assert result.exit_code == 1
         clean_output = strip_ansi(result.output).lower()
-        assert "invalid" in clean_output or "error" in clean_output
+        assert "invalid span patterns file" in clean_output
+        assert "traceback" not in clean_output
 
     def test_custom_strategy_with_malformed_json_exits_with_error(self, malformed_json_file: Path) -> None:
         """--span-patterns with malformed JSON should exit 1."""
@@ -165,7 +167,8 @@ class TestPreprocessCategorizerValidation:
         )
         assert result.exit_code == 1
         clean_output = strip_ansi(result.output).lower()
-        assert "invalid" in clean_output or "error" in clean_output
+        assert "invalid span patterns file" in clean_output
+        assert "traceback" not in clean_output
 
     def test_nlp_strategy_with_span_patterns_validates_file(
         self, valid_patterns_file: Path, tmp_path: Path, monkeypatch
