@@ -122,8 +122,10 @@ def test_grep_for_git_commit_text_on_main_is_allowed(repo: Path) -> None:
     assert result.stderr == ""
 
 
-def test_git_commit_after_newline_argument_text_is_not_a_commit(repo: Path) -> None:
-    """Newline is not a command boundary, so argument text cannot match."""
+def test_git_commit_after_line_continuation_argument_text_is_not_a_commit(
+    repo: Path,
+) -> None:
+    """A backslash-newline joins lines, so `git commit` stays an argument of grep."""
     result = _run_hook(repo, _bash_input("grep -e foo \\\n  git commit docs/"))
 
     assert result.returncode == 0
@@ -137,15 +139,84 @@ def test_git_commit_after_newline_argument_text_is_not_a_commit(repo: Path) -> N
         "sh -c 'git commit -m x'",
         'bash -lc "git commit -m x"',
         "git --no-pager commit -m x",
-        "git --no-pager -C {dir} commit -m x",
+        "git -c core.hooksPath=/x commit -m x",
+        "git commit; echo hi",
+        "git commit&&echo",
+        "git commit|tee f",
+        "(git commit)",
+        "git add x\ngit commit -m y",
+        "time git commit -m x",
+        "env X=1 git commit -m x",
+        "GIT_DIR=x git commit -m x",
+        "sudo git commit -m x",
+        "command git commit -m x",
+        "exec git commit -m x",
+        "xargs git commit -m x",
+        "if true; then git commit -m x; fi",
+        "for i in 1; do git commit -m x; done",
+        "! git commit -m x",
+        "{ git commit -m x; }",
+        "git --git-dir /x commit -m x",
+        "git --work-tree /x commit -m x",
     ],
-    ids=["abs-path", "sh-c-single-quote", "bash-lc-double-quote", "long-option", "long-option-then-C"],
+    ids=[
+        "abs-path",
+        "sh-c-single-quote",
+        "bash-lc-double-quote",
+        "long-option",
+        "lowercase-c-option",
+        "semicolon-after-commit",
+        "ampersand-after-commit",
+        "pipe-after-commit",
+        "subshell",
+        "plain-newline",
+        "prefix-time",
+        "prefix-env",
+        "prefix-assignment",
+        "prefix-sudo",
+        "prefix-command",
+        "prefix-exec",
+        "prefix-xargs",
+        "keyword-then",
+        "keyword-do",
+        "keyword-bang",
+        "keyword-brace",
+        "long-option-git-dir-value",
+        "long-option-work-tree-value",
+    ],
 )
-def test_false_negative_forms_are_blocked_on_main(repo: Path, command: str) -> None:
-    result = _run_hook(repo, _bash_input(command.format(dir=repo)))
+def test_commit_forms_are_blocked_on_main(repo: Path, command: str) -> None:
+    result = _run_hook(repo, _bash_input(command))
 
     assert result.returncode == 2
     assert BLOCK_MESSAGE in result.stderr
+
+
+def test_long_option_then_C_targets_other_dir(tmp_path: Path) -> None:
+    """`-C` after a long option selects the checked directory, not the cwd."""
+    cwd_repo = _init_repo(tmp_path / "cwd", "feat/issue-597-cwd")
+    target = _init_repo(tmp_path / "target", "main")
+
+    result = _run_hook(cwd_repo, _bash_input(f"git --no-pager -C {target} commit -m x"))
+
+    assert result.returncode == 2
+    assert BLOCK_MESSAGE in result.stderr
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        'grep -c "git commit" docs/',
+        'echo "a; git commit"',
+        'git log --grep="x; git commit"',
+    ],
+    ids=["grep-c-quoted", "echo-quoted-separator", "log-grep-quoted"],
+)
+def test_quoted_commit_text_as_argument_is_not_a_commit(repo: Path, command: str) -> None:
+    result = _run_hook(repo, _bash_input(command))
+
+    assert result.returncode == 0
+    assert result.stderr == ""
 
 
 @pytest.mark.parametrize("quote", ['"', "'"], ids=["double", "single"])
