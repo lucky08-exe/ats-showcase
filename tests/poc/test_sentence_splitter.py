@@ -29,6 +29,8 @@ def test_embedded_newline_inside_sentence_is_not_split() -> None:
 
 
 def test_markdown_line_with_multiple_sentences_splits_correctly() -> None:
+    # Known/intended POC limitation: the heading has no terminator, so it glues onto
+    # the following sentence. The assertion pins this behavior; do not "fix" it here.
     text = "## Requirements\n\nYou must know Python. Experience with SQL is a plus!"
     assert _split(text) == [
         "## Requirements\n\nYou must know Python.",
@@ -73,4 +75,14 @@ def test_module_has_no_src_imports() -> None:
 
 
 def test_module_does_not_split_on_newline() -> None:
-    assert '.split("\\n")' not in MODULE_PATH.read_text(encoding="utf-8")
+    tree = ast.parse(MODULE_PATH.read_text(encoding="utf-8"))
+    offending: list[str] = []
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+            continue
+        if node.func.attr != "split":
+            continue
+        for arg in node.args:
+            if isinstance(arg, ast.Constant) and isinstance(arg.value, str) and "\n" in arg.value:
+                offending.append(f"line {node.lineno}: .split({arg.value!r})")
+    assert offending == [], f"newline-based .split() forbidden in sentence_splitter: {offending}"

@@ -1,8 +1,18 @@
-"""Standalone, fully-isolated POC: regex-based sentence splitter spaCy component.
+r"""Standalone, fully-isolated POC: regex-based sentence splitter spaCy component.
 
 Issue #638. Independent re-implementation of "sentences" output. Does NOT import
 any ``src.*`` module. Only spaCy and stdlib. Runs on ``spacy.blank("en")`` with no
 parser, sentencizer, or model dependency.
+
+Known limitations (accepted for the POC):
+
+- Bullet lines without terminal punctuation join into one sentence. ``"- Python\n- SQL"``
+  yields 1 entry, since ``\n`` is not a boundary.
+- Abbreviations split. ``"e.g. Django."`` yields 2 entries.
+- A closing quote or bracket after a terminator blocks the split.
+- An ellipsis splits at each dot.
+- A markdown heading glues onto the following sentence when no terminator separates them.
+  ``"## Requirements\n\nYou must know Python."`` yields 1 entry.
 """
 
 from __future__ import annotations
