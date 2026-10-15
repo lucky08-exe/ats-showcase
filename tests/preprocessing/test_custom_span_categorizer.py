@@ -166,6 +166,68 @@ class TestValidatePatternAlternationOverlap:
             CustomSpanCategorizer(patterns)
 
 
+class TestValidatePatternMultiLevelWrapper:
+    """Tests for repeated groups whose body ends in a quantified atom.
+
+    The single-``)`` nested-quantifier regex misses wrappers with two or more
+    closing parens between the inner and outer quantifier. The group-stack
+    scanner catches them at any depth. Neighbours (escaped parens, character
+    classes, unrepeated or exact-count groups) must still pass.
+    """
+
+    @pytest.mark.parametrize(
+        "pattern",
+        [
+            "((a+))+",
+            "(((a+)))*",
+            "(?:(?:a+))+",
+            "((((a+))))*",
+            "((a+)?)+",
+            "(x(a+))+",
+            "(b|a+)+",
+        ],
+    )
+    def test_multi_level_wrapper_rejected(self, pattern: str) -> None:
+        """Repeated groups whose body ends quantified at any depth should raise."""
+        with pytest.raises(ValueError, match="ReDoS"):
+            validate_pattern(pattern)
+
+    @pytest.mark.parametrize(
+        "pattern",
+        [
+            # Must-pass set: no nested quantifier, or quantifier not in a repeated group
+            "(a+)b+",
+            "(ab)+",
+            "(a|b)+",
+            "a+b",
+            "a+?b",
+            # Escaped parens are literals, so the outer + does not repeat a group
+            r"\(a+\)+",
+            # Quantifier characters inside a class are not quantifiers
+            "[a+]+",
+            # Body ends in an escaped literal paren, not a group close
+            r"(a+\))+",
+            # Class holding ')' must not close the group early; body ends in literal a
+            "([)]+a)+",
+            # Class holding '(' must not open a group
+            "([(]a)+",
+            # Escaped quantifier is a literal, not a quantified atom
+            r"((a\+))+",
+            # Body ends in a literal after the quantified atom
+            "((a+)b)+",
+            # Wrapper without an outer repeat
+            "((a+))",
+            # Exact count is not a repeat (matches the existing {n} policy)
+            "((a+)){2}",
+            # Sibling groups do not nest
+            "(a+)(b+)",
+        ],
+    )
+    def test_multi_level_neighbours_accepted(self, pattern: str) -> None:
+        """Escapes, classes, literals and non-repeated wrappers should pass."""
+        validate_pattern(pattern)
+
+
 class TestCustomSpanCategorizer:
     """Tests for CustomSpanCategorizer class."""
 
