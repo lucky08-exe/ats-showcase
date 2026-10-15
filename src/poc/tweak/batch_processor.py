@@ -15,6 +15,9 @@ Stages:
 7. SkillProcessor: Extract skills from sections (Issue #321)
 8. TechnologyProcessor: Extract technologies from sections (Issue #321)
 
+Stage 9 (Issue #643): poc_sentence_splitter populates ``JobResult.sentences`` from the
+polished markdown; disable with ``--no-poc-sentences`` / ``enable_poc_sentence_splitter=False``.
+
 Components are instantiated once and reused across all jobs for efficiency.
 Per-job errors are captured without aborting the batch.
 
@@ -39,6 +42,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import spacy
 
+import src.poc.sentence_splitter  # noqa: F401  (registers poc_sentence_splitter factory + doc extension)
 from src.poc.tweak.markdown_section_classifier import SectionClassifier
 from src.poc.tweak.multi_line_paragraph import MarkdownSpanRuler
 from src.poc.tweak.section_model import MarkdownSection
@@ -75,6 +79,7 @@ class JobResult:
         markdown_sections: List of MarkdownSection objects with full metadata (Issue #338)
         errors: List of (stage_name, error_message) tuples for per-stage errors
         warnings: List of (stage_name, warning_message) tuples for per-job warnings (not failures)
+        sentences: Sentences split from polished_markdown by poc_sentence_splitter (Issue #643)
     """
 
     job_id: str
@@ -91,6 +96,7 @@ class JobResult:
     markdown_sections: List[MarkdownSection] = field(default_factory=list)
     errors: List[tuple] = field(default_factory=list)
     warnings: List[Tuple[str, str]] = field(default_factory=list)
+    sentences: List[str] = field(default_factory=list)
 
     def add_error(self, stage: str, error: str) -> None:
         """Add a per-stage error to the result.
@@ -427,6 +433,8 @@ def process_job(
         # Create a spaCy Doc for extraction using the fully-configured nlp pipeline
         # This ensures all extensions and components are available
         doc = nlp(polished_markdown)
+        # Sentences come from polished_markdown, not promoted_markdown (intentional; no section alignment)
+        result.sentences = list(doc._.poc_sentences or [])
 
         # Ensure sections are populated on the doc for classification
         doc._.sections = sections  # Pre-populate sections from ruler output
@@ -470,6 +478,7 @@ def run_batch(
     description_match: str = "first",
     promote_headings: bool = True,
     config_dir: str = "config_test",
+    enable_poc_sentence_splitter: bool = True,
 ) -> List[JobResult]:
     """Run batch processing on all jobs in input file.
 
@@ -495,6 +504,8 @@ def run_batch(
         promote_headings: Whether to promote plain-text headings (default True, Issue #365)
         config_dir: Directory of company config JSON files used to resolve per-job
                           selectors from ``source_config`` (default "config_test")
+        enable_poc_sentence_splitter: Whether to add the poc_sentence_splitter pipe and
+                          populate ``JobResult.sentences`` (default True, Issue #643)
 
     Returns:
         List of JobResult objects (one per job)
@@ -518,6 +529,10 @@ def run_batch(
     # Explicit entity_ruler registration (required by TechnologyProcessor, D5 decision)
     if "entity_ruler" not in nlp.pipe_names:
         nlp.add_pipe("entity_ruler", before="ner")
+
+    # Sentence splitter (Issue #643); default-on, disable with --no-poc-sentences
+    if enable_poc_sentence_splitter and "poc_sentence_splitter" not in nlp.pipe_names:
+        nlp.add_pipe("poc_sentence_splitter")
 
     # Load technology patterns into entity_ruler (Issue #321 fix)
     ruler = nlp.get_pipe("entity_ruler")
@@ -809,6 +824,11 @@ def main() -> int:
         action="store_true",
         help="Disable plain-text heading promotion (default: headings promoted, Issue #365)",
     )
+    parser.add_argument(
+        "--no-poc-sentences",
+        action="store_true",
+        help="Disable poc_sentence_splitter; sentences field stays empty (default: enabled, Issue #643)",
+    )
 
     args = parser.parse_args()
 
@@ -830,6 +850,7 @@ def main() -> int:
             description_match=description_match,
             promote_headings=not args.no_promote_headings,
             config_dir=args.config_dir,
+            enable_poc_sentence_splitter=not args.no_poc_sentences,
         )
         print_summary(results)
 
