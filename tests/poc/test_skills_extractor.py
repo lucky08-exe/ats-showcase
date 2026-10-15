@@ -995,6 +995,25 @@ class TestSkillExtractorAdjectiveListComma:
         """A plain adverb after a skill verb with no adjective list is not a skill (#588)."""
         assert extractor.extract("You will design quickly.") == []
 
+    def test_adverb_led_list_rejects_skill_verb_segment(self, extractor):
+        """A skill-verb segment ('lead') after an ADV-led list is a verb, not a premodifier (#599)."""
+        assert extractor.extract("You will design fast, lead teams.") == []
+
+    def test_adverb_led_list_rejects_skill_verb_segment_in_serial_list(self, extractor):
+        """No merged span when a skill-verb segment closes an ADV-led serial list (#599)."""
+        assert extractor.extract("You will design quickly, lead teams, and mentor engineers.") == []
+
+    def test_adverb_led_list_coordinated_verb_pinned(self, extractor):
+        """ADV-led list after a coordinated verb: current output pinned (#599)."""
+        assert extractor.extract("You will design APIs and build quickly, reliable services.") == [
+            "build quickly, reliable services",
+            "design apis",
+        ]
+
+    def test_adverb_led_list_verb_tagged_premodifier(self, extractor):
+        """'secure' tagged VERB before a noun head is a premodifier on the ADV path (#599)."""
+        assert extractor.extract("You will develop quickly, secure APIs.") == ["develop quickly, secure apis"]
+
 
 class TestSkillExtractorParticipialWith:
     """Past-tense/participle "built with <tech>" names a stack, not a skill (#551).
