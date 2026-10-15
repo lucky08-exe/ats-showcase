@@ -10,6 +10,7 @@ import json
 import re
 from pathlib import Path
 
+from spacy.language import Language
 from spacy.tokens import Doc
 
 from src.preprocessing.span_types import (
@@ -388,6 +389,28 @@ class SpanCategorizerComponent:
 
         doc._.custom_spans = spans_list
         return doc
+
+
+@Language.factory("custom_span_categorizer", default_config={"patterns_path": None})
+def create_custom_span_categorizer_component(
+    nlp: Language, name: str, patterns_path: str | None
+) -> SpanCategorizerComponent:
+    """Build a SpanCategorizerComponent from a JSON patterns file.
+
+    Args:
+        nlp: Owning spaCy pipeline (unused, required by factory protocol).
+        name: Component name in the pipeline (unused).
+        patterns_path: Path to patterns JSON (see load_patterns).
+
+    Returns:
+        SpanCategorizerComponent writing doc._.custom_spans.
+
+    Raises:
+        ValueError: If patterns_path is missing or None.
+    """
+    if not patterns_path:
+        raise ValueError("custom_span_categorizer factory requires 'patterns_path' config")
+    return SpanCategorizerComponent(CustomSpanCategorizer(load_patterns(patterns_path)))
 
 
 __all__ = [
