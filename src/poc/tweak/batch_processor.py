@@ -244,7 +244,9 @@ def process_job(
     if description_selector:
         # Validate description_match strategy (only when selector is provided)
         effective_strategy = description_match
-        if description_match not in DESCRIPTION_MATCH_STRATEGIES:
+        # isinstance guard: an unhashable value (e.g. list from malformed config) would raise TypeError
+        # on set membership and abort the batch; treat it as invalid instead.
+        if not isinstance(description_match, str) or description_match not in DESCRIPTION_MATCH_STRATEGIES:
             # Invalid strategy: log warning and use "first"
             result.add_warning(
                 "html_scoping",
@@ -467,18 +469,32 @@ def run_batch(
     description_selector: Optional[str] = None,
     description_match: str = "first",
     promote_headings: bool = True,
+    config_dir: str = "config_test",
 ) -> List[JobResult]:
     """Run batch processing on all jobs in input file.
 
     Loads spaCy model, instantiates pipeline components once, then processes
     all jobs sequentially through the pipeline.
 
+    When ``description_selector`` is None, each job's selector and match strategy
+    are resolved from its ``source_config`` key (Issue #376). A global
+    ``description_selector`` (e.g. from ``--company``) overrides this for all jobs.
+    A ``source_config`` that cannot be resolved (missing config dir, unknown key,
+    unparsable or malformed config) does not fail the batch: the job is processed unscoped
+    and a ``source_config`` warning is recorded on that job. The warning is recorded per
+    affected job. Each distinct ``source_config`` is resolved once per batch (cache keyed by
+    key); a cache miss loads the company configs twice (once for selector, once for match).
+
     Args:
         input_path: Path to JSON file with job records
-        description_selector: Optional CSS selector to scope HTML fragments
+        description_selector: Optional CSS selector to scope HTML fragments. When set,
+                          applies to every job and disables per-job resolution.
         description_match: Strategy for multi-match selection ("first", "all", "longest").
-                          Default "first".
+                          Default "first". Applies to the global description_selector and to
+                          records without source_config; resolved source_config match wins otherwise.
         promote_headings: Whether to promote plain-text headings (default True, Issue #365)
+        config_dir: Directory of company config JSON files used to resolve per-job
+                          selectors from ``source_config`` (default "config_test")
 
     Returns:
         List of JobResult objects (one per job)
@@ -523,7 +539,20 @@ def run_batch(
 
     # Process all jobs
     results = []
+    # Cache of source_config -> (selector, match, error): skips re-resolving a key already seen in this batch
+    scoping_cache: Dict[str, Tuple[Optional[str], str, Optional[str]]] = {}
     for job in jobs:
+        job_selector = description_selector
+        job_match = description_match
+        resolve_error: Optional[str] = None
+        source_config = job.get("source_config")
+        if description_selector is None and source_config:
+            # Per-job scoping from source_config (Issue #376); --company (global) still wins above
+            key = str(source_config)
+            if key not in scoping_cache:
+                scoping_cache[key] = _resolve_job_scoping(key, config_dir)
+            job_selector, job_match, resolve_error = scoping_cache[key]
+
         result = process_job(
             job,
             nlp=nlp,
@@ -535,10 +564,13 @@ def run_batch(
             req_processor=req_processor,
             skill_processor=skill_processor,
             tech_processor=tech_processor,
-            description_selector=description_selector,
-            description_match=description_match,
+            description_selector=job_selector,
+            description_match=job_match,
             heading_promoter=heading_promoter,
         )
+        if resolve_error is not None:
+            # Unknown/invalid source_config: process job unscoped (as before), record a warning
+            result.add_warning("source_config", resolve_error)
         results.append(result)
 
     return results
@@ -709,6 +741,30 @@ def _resolve_description_match(company: str, config_dir: str) -> str:
     return selectors.get("description_selector_match", "first")
 
 
+def _resolve_job_scoping(source_config: str, config_dir: str) -> Tuple[Optional[str], str, Optional[str]]:
+    """Resolve (description_selector, description_match, error) for one source_config key (Issue #376).
+
+    Never raises. On any failure (ValueError for unknown key / missing selector / unparsable
+    config, OSError for a missing config dir, or AttributeError/TypeError from a malformed
+    config shape such as a top-level JSON array or a non-dict company value) returns
+    (None, "first", message) so the job is processed unscoped, matching the no-source_config
+    default; the caller records the message as a ``source_config`` warning on each affected job.
+    """
+    try:
+        selector = _resolve_description_selector(source_config, config_dir)
+        match = _resolve_description_match(source_config, config_dir)
+    except Exception as e:
+        # Deliberately broad: user-supplied config JSON can have any shape, and a malformed
+        # config must never abort the whole batch. Degrade this key to unscoped instead.
+        return (
+            None,
+            "first",
+            f"source_config '{source_config}' not resolved (config dir '{config_dir}' or key could not be "
+            f"loaded); processing full HTML: {e}",
+        )
+    return selector, match, None
+
+
 def main() -> int:
     """CLI entry point for batch processor.
 
@@ -735,13 +791,13 @@ def main() -> int:
         "--company",
         type=str,
         default=None,
-        help="Company config key or name to resolve description_selector from (optional, requires --config-dir)",
+        help="Company config key or name; selector applies to ALL records, overriding source_config (optional)",
     )
     parser.add_argument(
         "--config-dir",
         type=str,
         default="config_test",
-        help="Directory containing company config JSON files (default: config_test)",
+        help="Company config JSON directory; also resolves each record's source_config (default: config_test)",
     )
     parser.add_argument(
         "--no-promote-headings",
@@ -768,6 +824,7 @@ def main() -> int:
             description_selector=description_selector,
             description_match=description_match,
             promote_headings=not args.no_promote_headings,
+            config_dir=args.config_dir,
         )
         print_summary(results)
 

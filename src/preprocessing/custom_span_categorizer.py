@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterator
 from pathlib import Path
 
 from spacy.language import Language
@@ -68,43 +69,75 @@ def _branches_overlap(branches: list[str], case_insensitive: bool) -> bool:
     return False
 
 
-def _has_overlapping_repeated_alternation(pattern: str) -> bool:
-    """Scan pattern for a repeated group whose alternation branches overlap.
+def _scan_groups(pattern: str) -> Iterator[tuple[str, int, int]]:
+    """Yield ``(kind, start, end)`` events for the group structure of ``pattern``.
 
-    Tracks escapes, character classes and group nesting so that only the
-    top-level branches of each group are compared. Never raises: malformed
-    input is left for ``re.compile`` to report.
+    Kinds, in source order: ``"open"`` (group body begins at ``end``, after
+    any header), ``"branch"`` (top-level ``|`` of the innermost group),
+    ``"close"`` (``)`` closing an open group), ``"repeat"`` (quantifier span)
+    and ``"atom"`` (escape, character class, or other literal). Escapes,
+    classes and group headers are consumed whole. Unmatched ``)`` and ``|``
+    at depth 0 are atoms. A bare ``?`` yields nothing: it is not a repeat and
+    follows an atom or group whose state is already recorded.
     """
-    case_insensitive = _CASE_INSENSITIVE_FLAG.search(pattern) is not None
-    # Each open group: (index where the current branch starts, finished branches)
-    stack: list[tuple[int, list[str]]] = []
+    depth = 0
     n = len(pattern)
     i = 0
     while i < n:
         ch = pattern[i]
         if ch == "\\":
+            yield "atom", i, i + 2
             i += 2
-            continue
-        if ch == "[":
-            i = _skip_char_class(pattern, i)
-            continue
-        if ch == "(":
+        elif ch == "[":
+            end = _skip_char_class(pattern, i)
+            yield "atom", i, end
+            i = end
+        elif ch == "(":
             header = _GROUP_HEADER.match(pattern, i + 1)
             body_start = header.end() if header else i + 1
-            stack.append((body_start, []))
+            depth += 1
+            yield "open", i, body_start
             i = body_start
-            continue
-        if ch == "|" and stack:
-            start, branches = stack[-1]
-            branches.append(pattern[start:i])
-            stack[-1] = (i + 1, branches)
-        elif ch == ")" and stack:
-            start, branches = stack.pop()
-            branches.append(pattern[start:i])
-            repeated = _REPEAT_AFTER_GROUP.match(pattern, i + 1) is not None
+        elif ch == "|" and depth:
+            yield "branch", i, i + 1
+            i += 1
+        elif ch == ")" and depth:
+            depth -= 1
+            yield "close", i, i + 1
+            i += 1
+        else:
+            repeat = _REPEAT_AFTER_GROUP.match(pattern, i)
+            if repeat is not None:
+                yield "repeat", i, repeat.end()
+                i = repeat.end()
+                continue
+            if ch != "?":
+                yield "atom", i, i + 1
+            i += 1
+
+
+def _has_overlapping_repeated_alternation(pattern: str) -> bool:
+    """Scan pattern for a repeated group whose alternation branches overlap.
+
+    Compares only the top-level branches of each group. Never raises:
+    malformed input is left for ``re.compile`` to report.
+    """
+    case_insensitive = _CASE_INSENSITIVE_FLAG.search(pattern) is not None
+    # Each open group: (index where the current branch starts, finished branches)
+    stack: list[tuple[int, list[str]]] = []
+    for kind, start, end in _scan_groups(pattern):
+        if kind == "open":
+            stack.append((end, []))
+        elif kind == "branch":
+            branch_start, branches = stack[-1]
+            branches.append(pattern[branch_start:start])
+            stack[-1] = (end, branches)
+        elif kind == "close":
+            branch_start, branches = stack.pop()
+            branches.append(pattern[branch_start:start])
+            repeated = _REPEAT_AFTER_GROUP.match(pattern, end) is not None
             if repeated and len(branches) > 1 and _branches_overlap(branches, case_insensitive):
                 return True
-        i += 1
     return False
 
 
@@ -115,52 +148,30 @@ def _has_quantified_group_wrapper(pattern: str) -> bool:
     misses, e.g. ``((a+))+``. Each open group tracks whether its last item
     is quantified: directly (``a+``), or as a closed group whose own body
     ends quantified. An alternation counts if any branch ends quantified.
-    Escapes, character classes and group headers are skipped as in
-    ``_has_overlapping_repeated_alternation``. Never raises.
+    Never raises.
     """
     # Each frame: [last item quantified, an earlier alternation branch was]
     frames: list[list[bool]] = [[False, False]]
-    n = len(pattern)
-    i = 0
-    while i < n:
-        ch = pattern[i]
-        if ch == "\\":
-            frames[-1][0] = False
-            i += 2
-            continue
-        if ch == "[":
-            frames[-1][0] = False
-            i = _skip_char_class(pattern, i)
-            continue
-        if ch == "(":
-            header = _GROUP_HEADER.match(pattern, i + 1)
-            i = header.end() if header else i + 1
+    for kind, _start, end in _scan_groups(pattern):
+        if kind == "open":
             frames.append([False, False])
-            continue
-        if ch == "|":
+        elif kind == "branch":
             top = frames[-1]
             top[1] = top[1] or top[0]
             top[0] = False
-        elif ch == ")" and len(frames) > 1:
+        elif kind == "close":
             last, earlier = frames.pop()
             body_quantified = last or earlier
-            repeat = _REPEAT_AFTER_GROUP.match(pattern, i + 1)
-            if repeat is not None and body_quantified:
+            repeated = _REPEAT_AFTER_GROUP.match(pattern, end) is not None
+            if repeated and body_quantified:
                 return True
             # The closed group is a quantified item if it is repeated, and
             # otherwise carries its body's quantified-ness to the parent.
-            frames[-1][0] = body_quantified or repeat is not None
+            frames[-1][0] = body_quantified or repeated
+        elif kind == "repeat":
+            frames[-1][0] = True
         else:
-            repeat = _REPEAT_AFTER_GROUP.match(pattern, i)
-            if repeat is not None:
-                frames[-1][0] = True
-                i = repeat.end()
-                continue
-            # A bare "?" is not a repeat and does not change the flag: it
-            # follows an atom or group whose state is already recorded.
-            if ch != "?":
-                frames[-1][0] = False
-        i += 1
+            frames[-1][0] = False
     return False
 
 

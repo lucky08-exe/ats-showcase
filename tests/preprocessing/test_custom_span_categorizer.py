@@ -187,7 +187,7 @@ class TestValidatePatternMultiLevelWrapper:
             "((((a+))))*",
             "((a+)?)+",
             "(x(a+))+",
-            "(b|a+)+",
+            "((b|a+))+",
         ],
     )
     def test_multi_level_wrapper_rejected(self, pattern: str) -> None:
