@@ -85,6 +85,87 @@ class TestValidatePattern:
             validate_pattern("(?P<invalid")
 
 
+class TestValidatePatternAlternationOverlap:
+    """Tests for the static alternation-overlap heuristic in validate_pattern.
+
+    The check rejects quantified groups whose alternation branches overlap
+    (one branch equals or is a textual prefix of another). This is a
+    heuristic: see validate_pattern docstring for known limits.
+    """
+
+    @pytest.mark.parametrize(
+        "pattern",
+        [
+            "(a|a)+",
+            "(a|aa)+",
+            "(a|ab)*",
+            "(x|xy){2,}",
+            "(x|xy){2,5}",
+            "(a|aa)+?",
+            "(a|aa)++",
+            "(?:a|a)+",
+            "(?:a|aa)*",
+            "(ab|a)+",
+            "(a|b|a)+",
+            "(c|b|bc)+",
+            "(a|)+",
+            "(|a)+",
+            "(?i)(a|A)+",
+            "(?i:a|A)+",
+            "(a|a\\d)+",
+            "(a[)]|a)+",
+            "((a|aa)+|b)+",
+            "(x|x\\.y)+",
+        ],
+    )
+    def test_overlapping_alternation_rejected(self, pattern: str) -> None:
+        """Quantified groups with overlapping branches should raise ValueError."""
+        with pytest.raises(ValueError, match="ReDoS"):
+            validate_pattern(pattern)
+
+    @pytest.mark.parametrize(
+        "pattern",
+        [
+            "a+b",
+            "a+?b",
+            "(foo|bar)+",
+            "(?:red|green)*",
+            "(a|b)+",
+            "(a|b|c)+",
+            "(a|aa)",
+            "(a|aa)?",
+            "(a|A)+",
+            "(a\\|a|b)+",
+            "(a\\|a)+",
+            "(a[|]a|b)+",
+            "(a[|a]b)+",
+            "([]|]a|b)+",
+            "((a|aa)|b)+",
+            "(a|aa){3}",
+            "(a|aa)(b|c)+",
+            "(a|b)+(a|aa)",
+        ],
+    )
+    def test_benign_alternation_accepted(self, pattern: str) -> None:
+        """Non-overlapping, unquantified, or escaped alternations should pass."""
+        validate_pattern(pattern)
+
+    def test_overlap_check_applies_at_load_time(self, tmp_path: Path) -> None:
+        """Overlapping alternation in JSON pattern file should be rejected."""
+        pattern_file = tmp_path / "patterns.json"
+        pattern_file.write_text(json.dumps([{"category": "test", "pattern": "(a|aa)+"}]))
+
+        with pytest.raises(ValueError, match="ReDoS"):
+            load_patterns(pattern_file)
+
+    def test_overlap_check_applies_at_categorizer_init(self) -> None:
+        """CustomSpanCategorizer should refuse overlapping alternation patterns."""
+        patterns = [SpanPattern(category="test", pattern="(x|xy){2,}")]
+
+        with pytest.raises(ValueError, match="ReDoS"):
+            CustomSpanCategorizer(patterns)
+
+
 class TestCustomSpanCategorizer:
     """Tests for CustomSpanCategorizer class."""
 
