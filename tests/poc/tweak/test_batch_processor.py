@@ -1020,3 +1020,411 @@ class TestCLIFlags:
         # (which is the lazy import behavior)
         # This test just documents that config_test is the default
         assert True  # Placeholder; actual behavior verified by CLI tests above
+
+
+class TestPerJobSourceConfigScoping:
+    """Tests for per-record description_selector resolution from source_config (Issue #376)."""
+
+    @staticmethod
+    def _write_config_dir(tmp_path):
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "companies.json").write_text(
+            json.dumps(
+                {
+                    "companies": {
+                        "AlphaCo": {
+                            "name": "Alpha Co",
+                            "selectors": {
+                                "description_selector": ".alpha-desc",
+                                "description_selector_match": "longest",
+                            },
+                        },
+                        "BetaCo": {
+                            "name": "Beta Co",
+                            "selectors": {"description_selector": ".beta-desc"},
+                        },
+                    }
+                }
+            )
+        )
+        return config_dir
+
+    @staticmethod
+    def _write_jobs(tmp_path, records):
+        input_file = tmp_path / "jobs.json"
+        input_file.write_text(json.dumps(records))
+        return input_file
+
+    @staticmethod
+    def _record(job_id, source_config=None, present=True):
+        record = {"id": job_id, "title": "Dev", "company": "X", "description": "<p>placeholder</p>"}
+        if present:
+            record["source_config"] = source_config
+        return record
+
+    @pytest.fixture
+    def recorded_calls(self, monkeypatch):
+        """Replace process_job with a recorder that returns a minimal JobResult (no pipeline work)."""
+        from src.poc.tweak import batch_processor as bp
+
+        calls = []
+
+        def fake_process_job(job, **kwargs):
+            calls.append({"job_id": job["id"], **kwargs})
+            return JobResult(
+                job_id=job["id"],
+                title="Dev",
+                company="X",
+                sections_detected=0,
+                keyword_matches=0,
+                confidence_min=0.0,
+                confidence_max=0.0,
+                confidence_avg=0.0,
+            )
+
+        monkeypatch.setattr(bp, "process_job", fake_process_job)
+        return calls
+
+    def test_mixed_source_config_each_job_gets_its_own_selector(self, tmp_path, recorded_calls):
+        """Two companies in one input, no global override: each job receives its own company's selector/match."""
+        config_dir = self._write_config_dir(tmp_path)
+        input_file = self._write_jobs(
+            tmp_path,
+            [
+                self._record("a1", "AlphaCo"),
+                self._record("b1", "BetaCo"),
+                self._record("a2", "AlphaCo"),
+            ],
+        )
+
+        run_batch(str(input_file), config_dir=str(config_dir))
+
+        by_id = {c["job_id"]: c for c in recorded_calls}
+        assert by_id["a1"]["description_selector"] == ".alpha-desc"
+        assert by_id["a1"]["description_match"] == "longest"
+        assert by_id["a2"]["description_selector"] == ".alpha-desc"
+        assert by_id["a2"]["description_match"] == "longest"
+        assert by_id["b1"]["description_selector"] == ".beta-desc"
+        assert by_id["b1"]["description_match"] == "first"
+
+    def test_global_description_selector_overrides_all_jobs(self, tmp_path, recorded_calls):
+        """A global description_selector (--company path) wins for every job, regardless of source_config."""
+        config_dir = self._write_config_dir(tmp_path)
+        input_file = self._write_jobs(
+            tmp_path,
+            [self._record("a1", "AlphaCo"), self._record("b1", "BetaCo")],
+        )
+
+        run_batch(
+            str(input_file),
+            description_selector=".global-desc",
+            description_match="all",
+            config_dir=str(config_dir),
+        )
+
+        assert len(recorded_calls) == 2
+        for call in recorded_calls:
+            assert call["description_selector"] == ".global-desc"
+            assert call["description_match"] == "all"
+
+    def test_records_without_source_config_keep_defaults(self, tmp_path, recorded_calls):
+        """Missing key, None, and empty string all keep the old defaults (None selector, 'first' match)."""
+        config_dir = self._write_config_dir(tmp_path)
+        input_file = self._write_jobs(
+            tmp_path,
+            [
+                self._record("missing", present=False),
+                self._record("none", None),
+                self._record("empty", ""),
+            ],
+        )
+
+        run_batch(str(input_file), config_dir=str(config_dir))
+
+        assert len(recorded_calls) == 3
+        for call in recorded_calls:
+            assert call["description_selector"] is None
+            assert call["description_match"] == "first"
+
+    def test_unknown_source_config_degrades_to_unscoped_with_warning(self, tmp_path, recorded_calls):
+        """Unknown source_config: batch continues, job gets defaults, and a source_config warning is recorded.
+
+        Mirrors the existing resolver behaviour (ValueError 'No configuration found'), captured per job.
+        """
+        config_dir = self._write_config_dir(tmp_path)
+        input_file = self._write_jobs(
+            tmp_path,
+            [self._record("ghost", "NoSuchCo"), self._record("alpha", "AlphaCo")],
+        )
+
+        results = run_batch(str(input_file), config_dir=str(config_dir))
+
+        assert len(results) == 2
+        by_id = {c["job_id"]: c for c in recorded_calls}
+        assert by_id["ghost"]["description_selector"] is None
+        assert by_id["ghost"]["description_match"] == "first"
+        assert by_id["alpha"]["description_selector"] == ".alpha-desc"
+
+        ghost_result = next(r for r in results if r.job_id == "ghost")
+        source_warnings = [w for w in ghost_result.warnings if w[0] == "source_config"]
+        assert len(source_warnings) == 1
+        assert "NoSuchCo" in source_warnings[0][1]
+        assert "No configuration found" in source_warnings[0][1]
+        assert not ghost_result.has_errors()
+
+        alpha_result = next(r for r in results if r.job_id == "alpha")
+        assert not [w for w in alpha_result.warnings if w[0] == "source_config"]
+
+    def test_missing_config_dir_degrades_to_unscoped_with_warning(self, tmp_path, recorded_calls):
+        """Missing config dir (default 'config_test' absent): no exception, record processed unscoped, warning kept."""
+        input_file = self._write_jobs(tmp_path, [self._record("alpha", "AlphaCo")])
+
+        results = run_batch(str(input_file), config_dir=str(tmp_path / "nope"))
+
+        assert len(results) == 1
+        assert len(recorded_calls) == 1
+        assert recorded_calls[0]["description_selector"] is None
+        assert recorded_calls[0]["description_match"] == "first"
+
+        source_warnings = [w for w in results[0].warnings if w[0] == "source_config"]
+        assert len(source_warnings) == 1
+        assert "could not be loaded" in source_warnings[0][1]
+        assert "nope" in source_warnings[0][1]
+        assert not results[0].has_errors()
+
+    def test_non_str_truthy_source_config_is_stringified(self, tmp_path, recorded_calls):
+        """Non-str truthy source_config (int 123) is stringified to '123' as the lookup key: no crash.
+
+        Actual behaviour: no config key '123' exists, so the job is processed unscoped with a warning.
+        """
+        config_dir = self._write_config_dir(tmp_path)
+        input_file = self._write_jobs(tmp_path, [self._record("num", 123)])
+
+        results = run_batch(str(input_file), config_dir=str(config_dir))
+
+        assert len(results) == 1
+        assert recorded_calls[0]["description_selector"] is None
+        assert recorded_calls[0]["description_match"] == "first"
+        source_warnings = [w for w in results[0].warnings if w[0] == "source_config"]
+        assert len(source_warnings) == 1
+        assert "'123'" in source_warnings[0][1]
+        assert "No configuration found" in source_warnings[0][1]
+
+    def test_same_source_config_resolved_once_per_batch(self, tmp_path, monkeypatch, recorded_calls):
+        """Cache: two records sharing a source_config resolve once (one cache miss, two loader calls in resolver).
+
+        Spies the resolver (cache miss counter) and the config loader it calls.
+        """
+        from src.poc.tweak import batch_processor as bp
+        from src.poc.tweak import common
+
+        resolver_keys = []
+        original_resolver = bp._resolve_job_scoping
+
+        def counting_resolver(source_config, config_dir):
+            resolver_keys.append(source_config)
+            return original_resolver(source_config, config_dir)
+
+        loader_calls = []
+        original_loader = common.load_all_company_configs
+
+        def counting_loader(config_dir):
+            loader_calls.append(config_dir)
+            return original_loader(config_dir)
+
+        monkeypatch.setattr(bp, "_resolve_job_scoping", counting_resolver)
+        monkeypatch.setattr(common, "load_all_company_configs", counting_loader)
+
+        config_dir = self._write_config_dir(tmp_path)
+        input_file = self._write_jobs(
+            tmp_path,
+            [self._record("a1", "AlphaCo"), self._record("a2", "AlphaCo"), self._record("a3", "AlphaCo")],
+        )
+
+        run_batch(str(input_file), config_dir=str(config_dir))
+
+        assert resolver_keys == ["AlphaCo"]
+        # Resolver loads config twice (selector + match) on the single cache miss
+        assert len(loader_calls) == 2
+        assert len(recorded_calls) == 3
+        assert all(c["description_selector"] == ".alpha-desc" for c in recorded_calls)
+
+    def test_top_level_array_config_degrades_to_unscoped_without_abort(self, tmp_path, recorded_calls):
+        """Top-level JSON array config (AttributeError in loader): batch continues, job unscoped, warning recorded."""
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "companies.json").write_text(json.dumps([1, 2]))
+        input_file = self._write_jobs(tmp_path, [self._record("alpha", "AlphaCo")])
+
+        results = run_batch(str(input_file), config_dir=str(config_dir))
+
+        assert len(results) == 1
+        assert len(recorded_calls) == 1
+        assert recorded_calls[0]["description_selector"] is None
+        assert recorded_calls[0]["description_match"] == "first"
+        source_warnings = [w for w in results[0].warnings if w[0] == "source_config"]
+        assert len(source_warnings) == 1
+        assert "not resolved" in source_warnings[0][1]
+        assert not results[0].has_errors()
+
+    def test_null_name_company_with_unknown_source_config_does_not_abort(self, tmp_path, recorded_calls):
+        """Another entry with "name": null plus unknown source_config (NoneType.lower): batch continues."""
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "companies.json").write_text(
+            json.dumps(
+                {
+                    "companies": {
+                        "NullNameCo": {"name": None, "selectors": {"description_selector": ".n"}},
+                        "AlphaCo": {
+                            "name": "Alpha Co",
+                            "selectors": {"description_selector": ".alpha-desc"},
+                        },
+                    }
+                }
+            )
+        )
+        input_file = self._write_jobs(
+            tmp_path,
+            [self._record("ghost", "NoSuchCo"), self._record("alpha", "AlphaCo")],
+        )
+
+        results = run_batch(str(input_file), config_dir=str(config_dir))
+
+        assert len(results) == 2
+        by_id = {c["job_id"]: c for c in recorded_calls}
+        assert by_id["ghost"]["description_selector"] is None
+        assert by_id["ghost"]["description_match"] == "first"
+        assert by_id["alpha"]["description_selector"] == ".alpha-desc"
+
+        ghost_result = next(r for r in results if r.job_id == "ghost")
+        source_warnings = [w for w in ghost_result.warnings if w[0] == "source_config"]
+        assert len(source_warnings) == 1
+        assert "not resolved" in source_warnings[0][1]
+        assert not ghost_result.has_errors()
+
+    def test_non_dict_company_value_degrades_to_unscoped_without_abort(self, tmp_path, recorded_calls):
+        """Non-dict company value ("AlphaCo": "x", AttributeError in resolver): batch continues, jobs unscoped."""
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "companies.json").write_text(
+            json.dumps({"companies": {"AlphaCo": "x", "BetaCo": {"name": "Beta Co", "selectors": {}}}})
+        )
+        input_file = self._write_jobs(
+            tmp_path,
+            [self._record("alpha", "AlphaCo"), self._record("beta", "BetaCo")],
+        )
+
+        results = run_batch(str(input_file), config_dir=str(config_dir))
+
+        assert len(results) == 2
+        assert len(recorded_calls) == 2
+        for call in recorded_calls:
+            assert call["description_selector"] is None
+            assert call["description_match"] == "first"
+        for result in results:
+            source_warnings = [w for w in result.warnings if w[0] == "source_config"]
+            assert len(source_warnings) == 1
+            assert "not resolved" in source_warnings[0][1]
+            assert not result.has_errors()
+
+    def test_list_description_selector_match_falls_back_to_first_without_abort(self, tmp_path):
+        """Unhashable description_selector_match (list) from source_config: html_scoping warning, batch continues."""
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "companies.json").write_text(
+            json.dumps(
+                {
+                    "companies": {
+                        "AlphaCo": {
+                            "name": "Alpha Co",
+                            "selectors": {
+                                "description_selector": ".desc",
+                                "description_selector_match": ["all"],
+                            },
+                        },
+                    }
+                }
+            )
+        )
+        input_file = self._write_jobs(
+            tmp_path,
+            [
+                {
+                    "id": "alpha",
+                    "title": "Dev",
+                    "company": "Alpha Co",
+                    "description": '<div class="desc">First match</div><div class="desc">Second match</div>',
+                    "source_config": "AlphaCo",
+                },
+                {
+                    "id": "plain",
+                    "title": "Dev",
+                    "company": "X",
+                    "description": "<p>No scoping here</p>",
+                },
+            ],
+        )
+
+        results = run_batch(str(input_file), config_dir=str(config_dir))
+
+        assert len(results) == 2
+        alpha_result = next(r for r in results if r.job_id == "alpha")
+        html_scope_warnings = [w[1] for w in alpha_result.warnings if w[0] == "html_scoping"]
+        assert any("Invalid description_selector_match value" in w for w in html_scope_warnings)
+        assert any("falling back to 'first'" in w for w in html_scope_warnings)
+        assert not alpha_result.has_errors()
+        assert not [w for w in alpha_result.warnings if w[0] == "source_config"]
+
+    def test_cli_config_dir_forwarded_to_run_batch_without_company(self, tmp_path, monkeypatch):
+        """Test that --config-dir reaches run_batch without --company (per-job source_config resolution)."""
+        import sys
+
+        import src.poc.tweak.batch_processor as bp
+
+        config_dir = tmp_path / "custom_configs"
+        config_dir.mkdir()
+        input_file = tmp_path / "jobs.json"
+        input_file.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "alpha",
+                        "title": "Dev",
+                        "company": "Alpha",
+                        "description": "text",
+                        "source_config": "alpha",
+                    },
+                    {"id": "beta", "title": "Dev", "company": "Beta", "description": "text"},
+                ]
+            )
+        )
+
+        recorded: dict = {}
+
+        def fake_run_batch(input_path, **kwargs):
+            recorded["input_path"] = input_path
+            recorded.update(kwargs)
+            return []
+
+        monkeypatch.setattr(bp, "run_batch", fake_run_batch)
+        monkeypatch.setattr(bp, "print_summary", lambda results: None)
+        old_argv = sys.argv
+        try:
+            sys.argv = [
+                "batch_processor",
+                "--input-path",
+                str(input_file),
+                "--config-dir",
+                str(config_dir),
+            ]
+            exit_code = bp.main()
+        finally:
+            sys.argv = old_argv
+
+        assert exit_code == 0
+        assert recorded["input_path"] == str(input_file)
+        assert recorded["config_dir"] == str(config_dir)
+        assert recorded["config_dir"] != "config_test"
+        assert recorded["description_selector"] is None
