@@ -10,7 +10,7 @@ Known limitations (accepted for the POC):
   yields 1 entry, since ``\n`` is not a boundary.
 - Abbreviations split. ``"e.g. Django."`` yields 2 entries.
 - A closing quote or bracket after a terminator blocks the split.
-- An ellipsis splits at each dot.
+- Unspaced ellipses (``...``) split only before following whitespace; spaced ``. . .`` splits at each dot.
 - A markdown heading glues onto the following sentence when no terminator separates them.
   ``"## Requirements\n\nYou must know Python."`` yields 1 entry.
 """
