@@ -8,6 +8,7 @@ import json
 import re
 from pathlib import Path
 from typing import Generator
+from unittest.mock import MagicMock
 
 import pytest
 from typer.testing import CliRunner
@@ -75,6 +76,25 @@ def malformed_json_file(tmp_path: Path) -> Generator[Path, None, None]:
     with open(patterns_file, "w") as f:
         f.write("{invalid json [")
     yield patterns_file
+
+
+@pytest.fixture
+def stub_preprocessor(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+    """Stub Preprocessor to avoid loading spaCy model during tests.
+
+    Patches src.tokenization.preprocessor.Preprocessor with a MagicMock
+    so that categorizer validation tests can proceed to the jobs-check phase
+    without requiring en_core_web_md model to be installed.
+
+    Args:
+        monkeypatch: pytest fixture for patching modules
+
+    Returns:
+        MagicMock instance that replaces Preprocessor
+    """
+    mock_preprocessor = MagicMock()
+    monkeypatch.setattr("src.tokenization.preprocessor.Preprocessor", mock_preprocessor)
+    return mock_preprocessor
 
 
 class TestPreprocessCategorizerFlagsHelp:
@@ -171,15 +191,16 @@ class TestPreprocessCategorizerValidation:
         assert "traceback" not in clean_output
 
     def test_nlp_strategy_with_span_patterns_validates_file(
-        self, valid_patterns_file: Path, tmp_path: Path, monkeypatch
+        self, valid_patterns_file: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stub_preprocessor
     ) -> None:
         """nlp strategy with --span-patterns should still validate the file.
 
         Validates that file and strategy checks pass; command fails with no-jobs error
         to prove validation succeeded before the jobs check.
         """
-        # Chdir to tmp_path and create empty extracted_jobs dir so preprocess
-        # reaches the jobs-check phase (validation occurs before that)
+        # Stub Preprocessor so the spaCy model is not loaded; chdir to tmp_path
+        # and create empty extracted_jobs dir so preprocess reaches the jobs-check
+        # phase (validation occurs before that)
         monkeypatch.chdir(tmp_path)
         (tmp_path / "data" / "extracted_jobs").mkdir(parents=True, exist_ok=True)
 
@@ -205,14 +226,17 @@ class TestPreprocessCategorizerValidation:
         assert result.exit_code == 1
         assert "no extracted jobs found" in output_lower
 
-    def test_default_strategy_unchanged_without_flags(self, tmp_path: Path, monkeypatch) -> None:
+    def test_default_strategy_unchanged_without_flags(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stub_preprocessor
+    ) -> None:
         """Default behavior without --categorizer-strategy should use nlp and pass validation.
 
         Validates that omitting categorizer flags uses nlp strategy (default) without
         triggering validation errors. Command fails at jobs-check (no jobs found),
         proving validation passed.
         """
-        # Hermetic setup: chdir to tmp_path, create empty extracted_jobs dir
+        # Hermetic setup: stub Preprocessor so the spaCy model is not loaded;
+        # chdir to tmp_path, create empty extracted_jobs dir
         monkeypatch.chdir(tmp_path)
         (tmp_path / "data" / "extracted_jobs").mkdir(parents=True, exist_ok=True)
 
