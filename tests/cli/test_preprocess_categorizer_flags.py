@@ -175,10 +175,11 @@ class TestPreprocessCategorizerValidation:
     ) -> None:
         """nlp strategy with --span-patterns should still validate the file.
 
-        # SYNTHETIC: Valid patterns file test
+        Validates that file and strategy checks pass; command fails with no-jobs error
+        to prove validation succeeded before the jobs check.
         """
         # Chdir to tmp_path and create empty extracted_jobs dir so preprocess
-        # doesn't fail with "Directory not found" before reaching patterns validation
+        # reaches the jobs-check phase (validation occurs before that)
         monkeypatch.chdir(tmp_path)
         (tmp_path / "data" / "extracted_jobs").mkdir(parents=True, exist_ok=True)
 
@@ -192,19 +193,38 @@ class TestPreprocessCategorizerValidation:
                 str(valid_patterns_file),
             ],
         )
+        output_lower = strip_ansi(result.output).lower()
         # File validation should succeed (file exists and is valid)
         # Command may fail for other reasons (no jobs in DB, etc), but not for patterns
-        output_lower = strip_ansi(result.output).lower()
         # Assert the span-patterns validation did NOT fail
         assert "span patterns file not found" not in output_lower
         assert "invalid span patterns file" not in output_lower
         # Verify we got past the categorizer strategy validation (nlp is valid)
         assert "invalid categorizer strategy" not in output_lower
+        # Prove validation passed by checking exit code and jobs-check message
+        assert result.exit_code == 1
+        assert "no extracted jobs found" in output_lower
 
-    def test_default_strategy_unchanged_without_flags(self) -> None:
-        """Default behavior without --categorizer-strategy should remain nlp."""
-        result = runner.invoke(app, ["preprocess", "--help"])
-        assert result.exit_code == 0
-        clean_output = strip_ansi(result.output).lower()
-        # Default should be nlp (help text usually shows defaults)
-        assert "nlp" in clean_output
+    def test_default_strategy_unchanged_without_flags(self, tmp_path: Path, monkeypatch) -> None:
+        """Default behavior without --categorizer-strategy should use nlp and pass validation.
+
+        Validates that omitting categorizer flags uses nlp strategy (default) without
+        triggering validation errors. Command fails at jobs-check (no jobs found),
+        proving validation passed.
+        """
+        # Hermetic setup: chdir to tmp_path, create empty extracted_jobs dir
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "data" / "extracted_jobs").mkdir(parents=True, exist_ok=True)
+
+        # Invoke preprocess without any categorizer strategy or span-patterns flags
+        result = runner.invoke(app, ["preprocess"])
+        output_lower = strip_ansi(result.output).lower()
+
+        # Should fail at jobs-check, not at validation
+        assert result.exit_code == 1
+        assert "no extracted jobs found" in output_lower
+        # Validation error messages must NOT appear
+        assert "invalid categorizer strategy" not in output_lower
+        assert "--span-patterns" not in output_lower
+        assert "span patterns file not found" not in output_lower
+        assert "invalid span patterns file" not in output_lower
