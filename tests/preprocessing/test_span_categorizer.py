@@ -29,7 +29,10 @@ def nlp() -> Language:
     Returns:
         spaCy Language model
     """
-    return spacy.load("en_core_web_md")
+    try:
+        return spacy.load("en_core_web_md")
+    except OSError:
+        pytest.skip("en_core_web_md not installed")
 
 
 @pytest.fixture(scope="session")
