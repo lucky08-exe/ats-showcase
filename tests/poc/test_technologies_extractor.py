@@ -6,7 +6,7 @@ import pytest
 import spacy
 
 from src.poc.technologies.extract_technologies_a import TechExtractor
-from src.poc.technologies.patterns import TECH_TERMS
+from src.poc.technologies.patterns import HYPHEN_TECH_SUFFIXES, TECH_TERMS
 
 
 @pytest.fixture(scope="session")
@@ -720,3 +720,25 @@ class TestTechExtractorHyphenSuffix553:
         """'Spring-based' passes via the suffix rule; 'Go' via the 'with' cue. Not an adjacency fix."""
         techs = extractor.extract(nlp("Experience with Go and Spring-based services."))
         assert {"go", "spring"} <= set(techs)
+
+    @pytest.mark.parametrize("suffix", sorted(HYPHEN_TECH_SUFFIXES))
+    def test_each_hyphen_tech_suffix_extracted(self, extractor, nlp, suffix):
+        """Per-entry guard: every HYPHEN_TECH_SUFFIXES member keeps 'Go' via the suffix rule."""
+        text = f"We build Go-{suffix} services."  # SYNTHETIC: mechanics test, not real JD text
+        assert "go" in extractor.extract(nlp(text))
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Plan the Go-to-market launch.",  # SYNTHETIC: mechanics test, not real JD text
+            "The Go-live date moved to June.",  # SYNTHETIC: mechanics test, not real JD text
+        ],
+    )
+    def test_go_non_suffix_compound_not_extracted(self, extractor, nlp, text):
+        """Per-entry guard: compounds whose second word is not in HYPHEN_TECH_SUFFIXES are rejected."""
+        assert "go" not in extractor.extract(nlp(text))
+
+    def test_hyphen_tech_suffixes_is_lowercase_frozenset(self):
+        """Table shape guard: a frozenset of non-empty lowercase strings (rule compares lower_)."""
+        assert isinstance(HYPHEN_TECH_SUFFIXES, frozenset)
+        assert all(isinstance(s, str) and s and s == s.lower() for s in HYPHEN_TECH_SUFFIXES)
