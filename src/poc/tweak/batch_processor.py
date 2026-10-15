@@ -477,6 +477,10 @@ def run_batch(
     When ``description_selector`` is None, each job's selector and match strategy
     are resolved from its ``source_config`` key (Issue #376). A global
     ``description_selector`` (e.g. from ``--company``) overrides this for all jobs.
+    A ``source_config`` that cannot be resolved (missing config dir, unknown key,
+    unparsable config) does not fail the batch: the job is processed unscoped and a
+    ``source_config`` warning is recorded on that job. The warning is recorded per
+    affected job; the per-key cache only avoids reloading the config.
 
     Args:
         input_path: Path to JSON file with job records
@@ -737,15 +741,21 @@ def _resolve_description_match(company: str, config_dir: str) -> str:
 def _resolve_job_scoping(source_config: str, config_dir: str) -> Tuple[Optional[str], str, Optional[str]]:
     """Resolve (description_selector, description_match, error) for one source_config key (Issue #376).
 
-    Never raises. On resolver ValueError (unknown key or missing selector) returns
-    (None, "first", message) so the job is processed unscoped, matching the
-    no-source_config default; the caller records the message as a warning.
+    Never raises. On ValueError (unknown key, missing selector, unparsable config) or
+    OSError (config dir missing, e.g. FileNotFoundError) returns (None, "first", message)
+    so the job is processed unscoped, matching the no-source_config default; the caller
+    records the message as a ``source_config`` warning on each affected job.
     """
     try:
         selector = _resolve_description_selector(source_config, config_dir)
         match = _resolve_description_match(source_config, config_dir)
-    except ValueError as e:
-        return None, "first", f"source_config '{source_config}' not resolved; processing full HTML: {e}"
+    except (ValueError, OSError) as e:
+        return (
+            None,
+            "first",
+            f"source_config '{source_config}' not resolved (config dir '{config_dir}' or key could not be "
+            f"loaded); processing full HTML: {e}",
+        )
     return selector, match, None
 
 

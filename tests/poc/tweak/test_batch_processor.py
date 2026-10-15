@@ -1176,6 +1176,80 @@ class TestPerJobSourceConfigScoping:
         alpha_result = next(r for r in results if r.job_id == "alpha")
         assert not [w for w in alpha_result.warnings if w[0] == "source_config"]
 
+    def test_missing_config_dir_degrades_to_unscoped_with_warning(self, tmp_path, recorded_calls):
+        """Missing config dir (default 'config_test' absent): no exception, record processed unscoped, warning kept."""
+        input_file = self._write_jobs(tmp_path, [self._record("alpha", "AlphaCo")])
+
+        results = run_batch(str(input_file), config_dir=str(tmp_path / "nope"))
+
+        assert len(results) == 1
+        assert len(recorded_calls) == 1
+        assert recorded_calls[0]["description_selector"] is None
+        assert recorded_calls[0]["description_match"] == "first"
+
+        source_warnings = [w for w in results[0].warnings if w[0] == "source_config"]
+        assert len(source_warnings) == 1
+        assert "could not be loaded" in source_warnings[0][1]
+        assert "nope" in source_warnings[0][1]
+        assert not results[0].has_errors()
+
+    def test_non_str_truthy_source_config_is_stringified(self, tmp_path, recorded_calls):
+        """Non-str truthy source_config (int 123) is stringified to '123' as the lookup key: no crash.
+
+        Actual behaviour: no config key '123' exists, so the job is processed unscoped with a warning.
+        """
+        config_dir = self._write_config_dir(tmp_path)
+        input_file = self._write_jobs(tmp_path, [self._record("num", 123)])
+
+        results = run_batch(str(input_file), config_dir=str(config_dir))
+
+        assert len(results) == 1
+        assert recorded_calls[0]["description_selector"] is None
+        assert recorded_calls[0]["description_match"] == "first"
+        source_warnings = [w for w in results[0].warnings if w[0] == "source_config"]
+        assert len(source_warnings) == 1
+        assert "'123'" in source_warnings[0][1]
+        assert "No configuration found" in source_warnings[0][1]
+
+    def test_same_source_config_resolved_once_per_batch(self, tmp_path, monkeypatch, recorded_calls):
+        """Cache: two records sharing a source_config resolve once (one cache miss, two loader calls in resolver).
+
+        Spies the resolver (cache miss counter) and the config loader it calls.
+        """
+        from src.poc.tweak import batch_processor as bp
+        from src.poc.tweak import common
+
+        resolver_keys = []
+        original_resolver = bp._resolve_job_scoping
+
+        def counting_resolver(source_config, config_dir):
+            resolver_keys.append(source_config)
+            return original_resolver(source_config, config_dir)
+
+        loader_calls = []
+        original_loader = common.load_all_company_configs
+
+        def counting_loader(config_dir):
+            loader_calls.append(config_dir)
+            return original_loader(config_dir)
+
+        monkeypatch.setattr(bp, "_resolve_job_scoping", counting_resolver)
+        monkeypatch.setattr(common, "load_all_company_configs", counting_loader)
+
+        config_dir = self._write_config_dir(tmp_path)
+        input_file = self._write_jobs(
+            tmp_path,
+            [self._record("a1", "AlphaCo"), self._record("a2", "AlphaCo"), self._record("a3", "AlphaCo")],
+        )
+
+        run_batch(str(input_file), config_dir=str(config_dir))
+
+        assert resolver_keys == ["AlphaCo"]
+        # Resolver loads config twice (selector + match) on the single cache miss
+        assert len(loader_calls) == 2
+        assert len(recorded_calls) == 3
+        assert all(c["description_selector"] == ".alpha-desc" for c in recorded_calls)
+
     def test_cli_config_dir_forwarded_to_run_batch_without_company(self, tmp_path, monkeypatch):
         """Test that --config-dir reaches run_batch without --company (per-job source_config resolution)."""
         import sys
