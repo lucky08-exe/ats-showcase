@@ -101,66 +101,9 @@ Technical keyword expansion (Issue #192), boilerplate removal (Issue #193), comp
 
 ## Phase 2: Preprocessing Version Tracking (Issue #230 Phase 2)
 
-**Purpose:** Track which preprocessing pipeline processed each job, enable selective re-preprocessing with new versions.
+`job_reviews.preprocessing_version` (default `v2.0`) tracks `v1.0` (legacy, no boilerplate removal) vs `v2.0` (70+ patterns, 3-tier fallback; ~30% fewer tokens). CLI: `--show-version-stats`, `--re-preprocess-only-v1`, `--preprocessing-version 2.0`. JobStore: `get_version_stats()`, `get_jobs_by_version()`, `update_preprocessing_version()`.
 
-**Schema:** `preprocessing_version TEXT DEFAULT 'v2.0'` column in `job_reviews` table.
-
-**Versions:**
-- `v1.0` (legacy) – No boilerplate removal; raw HTML extraction
-- `v2.0` (new) – 70+ boilerplate patterns removed; 3-tier fallback chain
-
-### Selective Re-Preprocessing Workflow
-
-Query jobs by version, re-process old jobs with new pipeline:
-
-```bash
-# Show preprocessing status
-uv run python -m src.cli preprocess --show-version-stats
-
-# Re-preprocess only v1.0 jobs to v2.0
-uv run python -m src.cli preprocess \
-  --cv data/cv.json \
-  --re-preprocess-only-v1
-
-# Force specific version
-uv run python -m src.cli preprocess \
-  --cv data/cv.json \
-  --preprocessing-version 2.0
-```
-
-### API Usage (JobStore)
-
-```python
-from src.storage.job_store import JobStore
-
-store = JobStore("data/ats_playground.db")
-
-# Get version stats
-stats = store.get_version_stats()
-print(f"v1.0 jobs: {stats.get('1.0', 0)}, v2.0 jobs: {stats.get('2.0', 0)}")
-
-# Get jobs by version
-v1_jobs = store.get_jobs_by_version("v1.0")
-
-# Update version after re-processing
-for job in v1_jobs:
-    # Re-process with new pipeline...
-    store.update_preprocessing_version(job["job_id"], "v2.0")
-```
-
-### Cost Analysis
-
-Compare token usage across versions:
-
-```python
-# Query cost_tracking table for version comparison
-# SELECT preprocessing_version, AVG(actual_tokens), SUM(actual_cost)
-# FROM jobs j
-# JOIN cost_tracking c ON j.id = c.job_id
-# GROUP BY preprocessing_version
-```
-
-Expected benefit: v2.0 produces ~30% fewer tokens vs v1.0 (boilerplate removed).
+Full walkthrough (CLI examples, JobStore usage, cost analysis): [docs/dev-note/preprocess-phase2-and-phase8-detail.md](../../docs/dev-note/preprocess-phase2-and-phase8-detail.md).
 
 ## Requirement Extraction (Phase 8a, Issue #252)
 
@@ -184,17 +127,10 @@ Expected benefit: v2.0 produces ~30% fewer tokens vs v1.0 (boilerplate removed).
 
 **Strategies (Issue #278):** rules and strategy are injectable; `requirement_spans` dict shape stays frozen.
 
-```python
-from src.preprocessing.span_categorizer import create_span_categorizer
-from src.preprocessing.custom_span_categorizer import load_patterns
-from src.preprocessing.span_types import BoundaryRules
-
-nlp_cat = create_span_categorizer("nlp", rules=BoundaryRules())        # POS/DEP, callable on Doc
-custom = create_span_categorizer("custom", patterns=load_patterns("patterns.json"))  # regex, writes doc._.custom_spans
-```
+Code sample: [docs/dev-note/preprocess-phase2-and-phase8-detail.md](../../docs/dev-note/preprocess-phase2-and-phase8-detail.md#span-categorizer-strategy-code-sample-issue-278).
 
 - `custom` requires `patterns`; patterns are validated (500-char cap, nested-quantifier ReDoS heuristic) and input text is capped at 200k chars.
-- `CustomSpanCategorizer(patterns).categorize(text)` is spaCy-free. The spaCy wrapper is not registered as a pipeline factory yet (#381); no CLI flag yet (#380).
+- `CustomSpanCategorizer(patterns).categorize(text)` is spaCy-free. The spaCy wrapper is registered as a pipeline factory (#381, #618); no CLI flag yet (#380).
 - Tests for the strategies are model-free; 11 older spaCy-model tests need `en_core_web_md` (#383).
 
 See `docs/dev-note/phase8/span_algorithm.md` for algorithm pseudocode, boundary rules, edge cases.
