@@ -19,7 +19,7 @@ from src.poc.tweak.batch_processor import JobResult, load_jobs, run_batch
 class TestLoadJobs:
     """Tests for load_jobs() function."""
 
-    def test_load_jobs_valid_array_returns_list_of_dicts(self, tmp_path):
+    def test_load_jobs_valid_array_returns_list_of_dicts(self):
         """Test loading valid JSON array of job records."""
         # Arrange
         fixture_path = Path(__file__).parent.parent / "fixtures" / "details_test_fixture.json"
@@ -1008,18 +1008,6 @@ class TestCLIFlags:
             assert "No configuration found for company 'NonExistent'" in captured.err
         finally:
             sys.argv = old_argv
-
-    def test_default_config_dir_is_config_test(self):
-        """Test that default --config-dir is 'config_test' as per plan."""
-        # This test documents the default behavior; no --config-dir means config_test is used
-        # The lazy import of common.py only happens when --company is provided
-        # (verified by code structure: import only in _resolve_description_selector function)
-        from src.poc.tweak.batch_processor import _resolve_description_selector
-
-        # If we call _resolve_description_selector with config_test, common.py is imported
-        # (which is the lazy import behavior)
-        # This test just documents that config_test is the default
-        assert True  # Placeholder; actual behavior verified by CLI tests above
 
 
 class TestPerJobSourceConfigScoping:

@@ -94,7 +94,7 @@ class JobResult:
     skills: List[Dict[str, Any]] = field(default_factory=list)
     technologies: List[Dict[str, Any]] = field(default_factory=list)
     markdown_sections: List[MarkdownSection] = field(default_factory=list)
-    errors: List[tuple] = field(default_factory=list)
+    errors: List[tuple[str, str]] = field(default_factory=list)
     warnings: List[Tuple[str, str]] = field(default_factory=list)
     sentences: List[str] = field(default_factory=list)
 
