@@ -1,6 +1,6 @@
 #!/bin/bash
 # SubagentStop Loop Cap Hook (Issue #660)
-# 
+#
 # Caps the cavecrew-builder/cavecrew-reviewer review loop at 4 iterations.
 # Reads SubagentStop hook JSON on stdin; maintains a per-agent_id counter.
 #
