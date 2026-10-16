@@ -94,6 +94,16 @@
             "command": "/home/pluto-atom-4/.local/bin/graphify hook-guard read"
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/protected-file-guard.sh",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PostToolUse": [
