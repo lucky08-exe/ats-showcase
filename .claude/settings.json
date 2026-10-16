@@ -82,6 +82,26 @@
             "command": "/home/pluto-atom-4/.local/bin/graphify hook-guard read"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/log-agent-type.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/log-agent-type.sh",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PostToolUse": [
