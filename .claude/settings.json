@@ -45,9 +45,7 @@
       "Edit(/.claude/skills/**)",
       "Write(/.claude/skills/**)",
       "Edit(/.claude/settings.json)",
-      "Write(/.claude/settings.json)",
-      "Edit(/tasks.md)",
-      "Write(/tasks.md)"
+      "Write(/.claude/settings.json)"
     ],
     "ask": [
       "Bash(rm *)",
