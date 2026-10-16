@@ -8,13 +8,6 @@ tools:
   - Grep
   - Glob
   - Bash
-permissions:
-  write:
-    allow: ["tasks.md", "docs/**"]
-    deny: ["src/**", "tests/**", "CLAUDE.md", "AGENTS.md", ".claude/settings.json"]
-  bash:
-    allow: ["gh issue create", "gh issue list", "gh issue comment", "graphify query *", "graphify path *", "graphify explain *", "code-review-graph query *", "code-review-graph impact *", "code-review-graph architecture"]
-    ask: ["*"] # Prompts human before any other command
 ---
 
 ## OBJECTIVE
