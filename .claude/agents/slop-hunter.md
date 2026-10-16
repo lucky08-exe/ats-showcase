@@ -7,10 +7,6 @@ tools:
   - Grep
   - Glob
   - Bash
-permissions:
-  bash:
-    allow: ["code-review-graph dead-code", "code-review-graph query *", "code-review-graph impact *", "code-review-graph large-functions", "graphify query *", "graphify path *", "graphify explain *", "gh issue create", "gh issue list"]
-    ask: ["*"] # Prompts human before any other command
 ---
 
 ## OBJECTIVE
@@ -18,6 +14,7 @@ Identify "Dead Code Slop" (unused hooks, orphaned methods, unreferenced function
 
 ## EXCLUSIONS (never flag as dead)
 - CLI entry points and Typer/Click commands registered in `src/cli.py`
+- Typer `@app.command()` decorators (covered by CLI entry points above)
 - pytest fixtures and test helpers under `tests/`
 - Symbols exported via `__all__` or re-exported from a package `__init__.py`
 - Textual/TUI event handlers (`on_*`, `action_*`, `compose`) and other framework hooks
