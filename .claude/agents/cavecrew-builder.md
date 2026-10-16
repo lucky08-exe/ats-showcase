@@ -8,12 +8,6 @@ tools:
   - Grep
   - Glob
   - Bash
-permissions:
-  write:
-    deny: ["AGENTS.md", "CLAUDE.md", ".claude/agents/**", ".claude/rules/**", ".claude/skills/**", ".claude/settings.json", "tasks.md"]
-  bash:
-    allow: ["git diff *", "git status", "uv run pytest *", "uv run ruff *", "uv run mypy *", "bash .claude/scripts/run-local-ci.sh *"]
-    deny: ["rm -rf *", "git reset --hard*", "git push --force*"]
 ---
 
 # ROLE: CAVECREW-BUILDER

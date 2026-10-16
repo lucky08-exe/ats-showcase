@@ -6,10 +6,6 @@ tools:
   - Read
   - Grep
   - Bash
-permissions:
-  bash:
-    allow: ["git diff *", "git status", "code-review-graph detect-changes *", "code-review-graph impact *", "code-review-graph dead-code", "uv run ruff *", "uv run mypy *", "uv run pytest *"]
-    ask: ["gh pr comment"]
 ---
 
 # ROLE: CAVECREW-REVIEWER
