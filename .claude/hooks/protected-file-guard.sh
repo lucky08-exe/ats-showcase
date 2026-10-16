@@ -1,11 +1,12 @@
 #!/bin/bash
 # PreToolUse Protected File Guard Hook (Issue #659)
 #
-# Denies Edit/Write on protected paths (.claude/**, AGENTS.md, CLAUDE.md,
-# .claude/settings.json) when agent_type matches a known subagent type.
-# Allows when agent_type is absent/unrecognized (human main session never blocked)
-# or when tool is not Edit/Write, or when file_path is not protected.
-# Fails open on any error (missing jq, malformed JSON, etc.).
+# Denies Edit/Write on protected paths (AGENTS.md, CLAUDE.md, .claude/agents/**,
+# .claude/rules/**, .claude/skills/**, .claude/settings.json) when agent_type
+# matches a known subagent type. Allows when agent_type is absent/unrecognized
+# (human main session never blocked) or when tool is not Edit/Write, or when
+# file_path is not protected or outside repo. Fails open on any error (missing jq,
+# malformed JSON, etc.).
 
 set -e
 
@@ -79,35 +80,54 @@ if [ $type_is_known -eq 0 ]; then
   exit 0
 fi
 
-# Normalize file_path: remove leading slash, resolve .., remove symlinks, normalize to relative
-# If it's already relative (no leading /), use as-is after normalization
-normalized_path="$file_path"
-if [[ "$normalized_path" =~ ^/ ]]; then
-  normalized_path="${normalized_path:1}"
+# Normalize file_path to relative path within repo, or detect out-of-repo
+# If file_path is absolute, use as-is; else prefix with REPO_ROOT
+abs_path="$file_path"
+if [[ ! "$abs_path" =~ ^/ ]]; then
+  abs_path="$REPO_ROOT/$abs_path"
 fi
 
-# Resolve .. and normalize the path (simple approach: cd to repo root conceptually)
-# Use realpath if available, else manual normalization
+# Normalize using realpath if available
 if command -v realpath >/dev/null 2>&1; then
-  # realpath normalizes the path; we want it relative to REPO_ROOT
-  abs_path=$(realpath -m "$REPO_ROOT/$normalized_path" 2>/dev/null || echo "")
-  if [ -n "$abs_path" ]; then
-    # Make it relative to REPO_ROOT
-    normalized_path="${abs_path#$REPO_ROOT/}"
-  fi
+  abs_path=$(realpath -m "$abs_path" 2>/dev/null || echo "")
 fi
 
-# Check if normalized_path matches any protected path
+# Fail open if path is empty after normalization
+if [ -z "$abs_path" ]; then
+  exit 0
+fi
+
+# Check if normalized path is under REPO_ROOT
+if [[ ! "$abs_path" =~ ^"${REPO_ROOT}"/ ]] && [ "$abs_path" != "$REPO_ROOT" ]; then
+  # Path is outside the repo; allow
+  exit 0
+fi
+
+# Strip REPO_ROOT prefix to get relative path
+relative_path="${abs_path#$REPO_ROOT/}"
+if [ "$relative_path" = "$abs_path" ]; then
+  # No prefix removed; either path was exactly REPO_ROOT or normalization failed
+  relative_path=""
+fi
+
+# Handle worktree paths: strip .claude/worktrees/<name>/ if present
+if [[ "$relative_path" =~ ^\.claude/worktrees/[^/]+/ ]]; then
+  relative_path="${relative_path#.claude/worktrees/}"
+  # Remove the worktree name directory
+  relative_path="${relative_path#*/}"
+fi
+
+# Check if relative_path matches any protected path
 # Match logic: exact match or path component match (for .claude/agents/**, etc.)
 path_is_protected=0
 for protected in "${PROTECTED_PATHS[@]}"; do
   # Exact match
-  if [ "$normalized_path" = "$protected" ]; then
+  if [ "$relative_path" = "$protected" ]; then
     path_is_protected=1
     break
   fi
-  # Prefix match for directories (e.g., .claude/agents/foo.md matches .claude/agents)
-  if [[ "$normalized_path" =~ ^"${protected}"/ ]]; then
+  # Prefix match for directories (quoted pattern for literal matching)
+  if [[ "$relative_path" =~ ^"${protected}"/ ]]; then
     path_is_protected=1
     break
   fi
@@ -119,8 +139,9 @@ if [ $path_is_protected -eq 0 ]; then
 fi
 
 # Deny: all conditions met (Edit/Write, known agent_type, protected path)
-# Output permissionDecision JSON via jq
-jq -n --arg tool "$tool_name" --arg path "$file_path" --arg agent "$agent_type" \
-  '{permissionDecision: {decision: "deny", reason: "Edit/Write on protected file \($path) denied for subagent \($agent)"}}' 2>/dev/null || exit 0
+# Output permissionDecision via hookSpecificOutput per Claude Code protocol
+reason="Edit/Write on protected file $relative_path denied for subagent $agent_type"
+jq -n --arg r "$reason" \
+  '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $r}}' 2>/dev/null || exit 0
 
 exit 0
