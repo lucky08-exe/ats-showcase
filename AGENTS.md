@@ -101,7 +101,7 @@ Copilot: single-file edits. Claude Code: multi-file refactors (>3 files), cross-
 
 ## Code Graph Tooling (Issue #325)
 
-Architect uses `code-review-graph` (MCP) for structural/blast-radius context before wide scans — full detail + decision record: [.claude/README.md](.claude/README.md#code-graph-tooling-issue-325).
+Architect uses `code-review-graph` (MCP) for structural/blast-radius context before wide scans — full detail + decision record: [.claude/README.md](.claude/README.md#code-graph-tooling-issue-325-upgraded-328).
 
 ---
 
