@@ -61,7 +61,7 @@ counter_file="${COUNTER_DIR}/${sanitized_agent_id}.count"
 # Read current counter value (default 0 if missing or unreadable)
 current_count=0
 if [ -f "$counter_file" ]; then
-  current_count=$(cat "$counter_file" 2>/dev/null || echo '0' | xargs)
+  current_count=$(cat "$counter_file" 2>/dev/null) || current_count=0
   # Validate it's a number
   if ! [[ "$current_count" =~ ^[0-9]+$ ]]; then
     current_count=0
@@ -76,11 +76,9 @@ echo "$new_count" > "$counter_file" 2>/dev/null || exit 0
 
 # Check if we've hit the cap (4 events)
 if [ "$new_count" -eq 4 ]; then
-  cat >&2 << MSG
-⚠️ SubagentStop loop cap hit for agent_id: ${agent_id} (4 stop events)
-   Escalating to human review: subagent appears to be looping beyond intended iterations.
-   Counter state: ${COUNTER_DIR}/${sanitized_agent_id}.count
-MSG
+  # Output JSON to stdout so hook system shows it to user (fail open if jq is missing)
+  jq -n --arg agent_id "$agent_id" \
+    '{systemMessage: "SubagentStop loop cap hit for agent_id \($agent_id) (4 stop events): escalate to human review."}' 2>/dev/null || exit 0
 fi
 
 exit 0
