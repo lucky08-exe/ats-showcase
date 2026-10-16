@@ -118,7 +118,6 @@ JSON_FILES=(
     ".claude/settings.json"
     ".claude/permissions-base.json"
     ".claude/copilot-routing.json"
-    ".claude/agents/base.json"
 )
 
 for FILE in "${JSON_FILES[@]}"; do
