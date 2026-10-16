@@ -1010,7 +1010,6 @@ class TestCLIFlags:
             sys.argv = old_argv
 
 
-
 class TestPerJobSourceConfigScoping:
     """Tests for per-record description_selector resolution from source_config (Issue #376)."""
 
