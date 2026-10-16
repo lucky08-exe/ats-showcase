@@ -40,6 +40,7 @@ BUDGETS = {
     ".claude/rules/storage.md": 1500,
     ".claude/rules/cli.md": 1000,
     ".claude/rules/multi-agent.md": 2000,
+    ".claude/rules/cavecrew-shared.md": 600,
     # TUI subdirectory files (split from monolithic tui.md)
     ".claude/rules/tui/index.md": 500,
     ".claude/rules/tui/architecture.md": 1200,
