@@ -9,7 +9,7 @@
 
 set -e
 
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo '.')"
+REPO_ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 COUNTER_DIR="${REPO_ROOT}/.claude/logs/subagent-loop-cap"
 ALLOWED_TYPES=(
   "caveman:cavecrew-builder"
@@ -21,8 +21,8 @@ ALLOWED_TYPES=(
 # Read JSON from stdin
 input_json=$(cat 2>/dev/null || echo '{}')
 
-# Extract agent_id and agent_type using simple shell parsing
-# (fail open if jq is unavailable or JSON is malformed)
+# Extract agent_id and agent_type using jq
+# Fails open (returns empty) if jq is unavailable or JSON is malformed
 agent_id=$(echo "$input_json" | jq -r '.agent_id // empty' 2>/dev/null || echo '')
 agent_type=$(echo "$input_json" | jq -r '.agent_type // empty' 2>/dev/null || echo '')
 
