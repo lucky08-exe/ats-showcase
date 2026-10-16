@@ -90,17 +90,17 @@ fi
 - `.claude/skills/**` - Skill definitions
 - `.claude/settings.json` - Global configuration
 
-**Enforcement Mechanism:** `.claude/agents/builder.md` includes explicit deny rules:
-```yaml
-permissions:
-  write:
-    deny: ["AGENTS.md", "CLAUDE.md", ".claude/agents/**", ...]
-```
+**Enforcement Mechanism:** Two layers in the harness. Agent frontmatter `permissions:` blocks are not read by Claude Code and are not enforcement.
 
-If Builder attempts to modify protected files:
-- Tool layer blocks write operation
+1. **`.claude/settings.json` `permissions.deny`** - `Edit(...)` and `Write(...)` rules for each protected path above. Applies to every agent, including plugin subagents.
+2. **`.claude/hooks/protected-file-guard.sh`** - PreToolUse hook (matcher `Edit|Write`). Denies the same paths when `agent_type` is a known subagent type. Allows when `agent_type` is empty (human main session) or unrecognized, and never blocks the `SubagentHandback` pseudo-tool. Fails open on malformed input.
+
+If a subagent attempts to modify a protected file:
+- Tool layer denies the write (permissions.deny, then the hook)
 - Fallback: Pre-commit hook catches and rejects commit
 - Escalation: Human approval required (Architect or Human role)
+
+Protected files are edited by a human on a feature branch, via a reviewed PR.
 
 ---
 
@@ -118,7 +118,8 @@ Model selection by role:
 ## Related
 
 - **AGENTS.md**: Role definitions and governance framework
-- **Builder Agent**: `.claude/agents/builder.md` (deny rules)
+- **Settings**: `.claude/settings.json` (`permissions.deny`)
+- **Protected-file hook**: `.claude/hooks/protected-file-guard.sh`
 - **CI/CD Pipeline**: `.github/workflows/quality-checks.yml` (Gate 2 automation)
 
 ---
