@@ -25,11 +25,8 @@ Phase-level use of these tools: [multi-agent.md](multi-agent.md#code-graph-tooli
 
 ## False-Positive Avoidance
 
-Before flagging any symbol as dead, read the EXCLUSIONS list in
-[slop-hunter.md](../agents/slop-hunter.md). Never flag CLI entry points in `src/cli.py`,
-pytest fixtures under `tests/`, `__all__` / package re-exports, or TUI framework hooks
-(`on_*`, `action_*`, `compose`). Anything referenced from `.claude/`, `config/`, or docs
-by name is also excluded. When unsure, mark "needs human check" rather than "dead".
+Before flagging any symbol as dead, check the exclusions in
+[slop-hunter.md](../agents/slop-hunter.md#exclusions-never-flag-as-dead).
 
 ---
 
