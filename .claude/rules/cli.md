@@ -1,3 +1,10 @@
+---
+paths:
+  - "src/cli.py"
+  - "tests/cli/**"
+  - "tests/test_cli*.py"
+---
+
 # CLI Phase Rules
 
 Typer command patterns, sub-command organization, async orchestration, help text.
@@ -41,7 +48,6 @@ def crawl(
 
 See [CLI Usage](.../instructions/cli-usage.instructions.md) for full command reference.
 
-
 ## Async Patterns
 
 **Use async for concurrent crawling:**
@@ -80,13 +86,6 @@ CLI preprocessing pipeline uses unified `clean_html()` function (from `src.parse
 - **Features:** HTML → Markdown → section headers → boilerplate removal → entity normalization
 - **Performance:** 15x token reduction: ~6,000 → ~400 tokens/job
 - **Fallback Chain:** MarkItDown (primary) → BeautifulSoup (fallback) → Original HTML (safe)
-
-**Example:**
-```python
-from src.parsers.html_to_markdown import clean_html
-
-clean_text = clean_html(raw_html, include_section_headers=True)
-```
 
 ## Preprocessing Version Tracking
 

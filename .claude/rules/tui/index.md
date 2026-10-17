@@ -1,3 +1,9 @@
+---
+paths:
+  - "src/tui/**"
+  - "tests/tui/**"
+---
+
 # TUI Implementation Reference
 
 Textual-based Text User Interface for ATS Playground.

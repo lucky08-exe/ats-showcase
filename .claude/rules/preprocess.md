@@ -1,3 +1,14 @@
+---
+paths:
+  - "src/parsers/**"
+  - "src/preprocessing/**"
+  - "src/tokenization/**"
+  - "src/nlp/**"
+  - "tests/parsers/**"
+  - "tests/preprocessing/**"
+  - "tests/tokenization/**"
+---
+
 # Preprocess Phase Rules
 
 MarkItDown HTML cleaning, spaCy semantic chunking, token counting via tiktoken.
@@ -28,22 +39,6 @@ clean_text = clean_html(
 - `formatting` – Extra whitespace, CSS classes, metadata attributes
 - `navigation` – Page navigation, breadcrumbs, menus
 
-**Example output comparison:**
-```
-Before (raw HTML, ~6,000 tokens):
-  <div class="job-post">
-    <h2>Senior Python Developer</h2>
-    ...
-    <p>© 2026 Company Inc. All rights reserved. Equal Opportunity Employer...</p>
-    <nav><a href="/careers">Back to jobs</a></nav>
-  </div>
-
-After clean_html() (boilerplate removed, ~400 tokens):
-  ## Senior Python Developer
-
-  [job description and requirements, no legal/nav]
-```
-
 **Performance benefit:** 70+ pre-compiled regex patterns (10x faster than sequential regex per job). Backward compat: old jobs without boilerplate removal still queryable.
 
 **HTML→Markdown normalization (Issue #228, Phase 4 – IMPLEMENTED):** crawl stores raw extracted description as-is; `_build_preprocess_clean_text` (`src/cli.py` line 323) calls `src.parsers.html_to_markdown.clean_html()` — HTML→Markdown conversion + synthesized `##`/`###` section headers + `---` dividers + boilerplate removal (7 categories) — as the first step of preprocess, before chunking. Replaces deprecated `normalize_description()`. This used to run inline in `Crawler` at crawl time; it does not anymore.
@@ -53,37 +48,17 @@ After clean_html() (boilerplate removed, ~400 tokens):
 2. **BeautifulSoup + lxml** (fallback) – Basic text extraction, ~100ms/job
 3. **Original HTML** (safe) – Worst case, ~6K tokens, never fails
 
-```python
-from src.parsers.html_to_markdown import html_to_markdown
-
-clean_text = html_to_markdown(raw_html)
-# Automatically uses fallback chain: MarkItDown → BeautifulSoup → Original HTML
-```
-
 Robustness: Preprocessing never fails catastrophically (tests: `test_exception_fallback_returns_original_html`, `test_malformed_html_does_not_raise`).
 
 ## Semantic Chunking (Sentences, Not Tokens)
 
 Split at semantic boundaries: "Requires 5+ years MES. Must know Wonderware." stays together. Chunks vary 100–600 tokens (intentional).
 
-```python
-from src.tokenization.chunking import chunk_by_sentences
-
-chunks = chunk_by_sentences(clean_text, target_tokens=400)
-```
-
 Target: ~400 tokens/chunk (safe for LLM).
 
 ## Token Counting & Cost Transparency
 
 Always count before API calls.
-
-```python
-from src.tokenization.counter import count_tokens
-
-tokens = count_tokens(text)
-cost_usd = tokens * 0.000003  # Claude 3.5 Sonnet input rate
-```
 
 Show estimate before assessment. Track actual vs estimated in cost_tracking table.
 

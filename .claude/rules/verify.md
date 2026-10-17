@@ -1,3 +1,8 @@
+---
+paths:
+  - "src/verification/**"
+---
+
 # Verify Phase Rules
 
 Interactive CLI for user confirmation, cost transparency, rejection flow.

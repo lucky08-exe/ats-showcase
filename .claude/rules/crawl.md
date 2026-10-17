@@ -1,3 +1,10 @@
+---
+paths:
+  - "src/browser/**"
+  - "tests/browser/**"
+  - "config/**"
+---
+
 # Crawl Phase Rules
 
 Playwright automation patterns, CSS selectors, rate limiting, async coordination.
