@@ -29,18 +29,45 @@ def test_multi_sentence_single_line_splits_into_three() -> None:
     assert _split("A. B! C?") == ["A.", "B!", "C?"]
 
 
-def test_embedded_newline_inside_sentence_is_not_split() -> None:
-    assert _split("Must know\nPython.") == ["Must know\nPython."]
+def test_embedded_newline_is_split_into_two_sentences() -> None:
+    assert _split("Must know\nPython.") == ["Must know", "Python."]
 
 
 def test_markdown_line_with_multiple_sentences_splits_correctly() -> None:
-    # Known/intended POC limitation: the heading has no terminator, so it glues onto
-    # the following sentence. The assertion pins this behavior; do not "fix" it here.
     text = "## Requirements\n\nYou must know Python. Experience with SQL is a plus!"
     assert _split(text) == [
-        "## Requirements\n\nYou must know Python.",
+        "## Requirements",
+        "You must know Python.",
         "Experience with SQL is a plus!",
     ]
+
+
+def test_definition_list_line_is_split_on_newline() -> None:
+    assert _split("locations\n:   Seattle, WA") == ["locations", ":   Seattle, WA"]
+
+
+def test_bullet_lines_split_into_separate_sentences() -> None:
+    assert _split("* Item one\n* Item two") == ["* Item one", "* Item two"]
+
+
+def test_no_output_sentence_contains_newline() -> None:
+    text = "## Requirements\n\n* Must know Python.\n\nlocations\n:   Seattle, WA\n\nYou must know SQL. Also Go!"
+    sentences = _split(text)
+    assert sentences == [
+        "## Requirements",
+        "* Must know Python.",
+        "locations",
+        ":   Seattle, WA",
+        "You must know SQL.",
+        "Also Go!",
+    ]
+    assert all("\n" not in s and "\r" not in s for s in sentences)
+
+
+def test_crlf_line_endings_are_split_without_carriage_returns() -> None:
+    sentences = _split("Must know\r\nPython.\r\nSQL is good.\r\n")
+    assert sentences == ["Must know", "Python.", "SQL is good."]
+    assert all("\r" not in s and "\n" not in s for s in sentences)
 
 
 def test_empty_string_returns_empty_list() -> None:

@@ -6,13 +6,11 @@ parser, sentencizer, or model dependency.
 
 Known limitations (accepted for the POC):
 
-- Bullet lines without terminal punctuation join into one sentence. ``"- Python\n- SQL"``
-  yields 1 entry, since ``\n`` is not a boundary.
 - Abbreviations split. ``"e.g. Django."`` yields 2 entries.
 - A closing quote or bracket after a terminator blocks the split.
 - Unspaced ellipses (``...``) split only before following whitespace; spaced ``. . .`` splits at each dot.
-- A markdown heading glues onto the following sentence when no terminator separates them.
-  ``"## Requirements\n\nYou must know Python."`` yields 1 entry.
+- A soft-wrapped newline with no structural marker now splits. ``"Must know\nPython."`` yields
+  ``["Must know", "Python."]``.
 """
 
 from __future__ import annotations
@@ -22,7 +20,7 @@ import re
 from spacy.language import Language
 from spacy.tokens import Doc
 
-_SENTENCE_BOUNDARY_RE = re.compile(r"(?<=[.!?])\s+")
+_SENTENCE_BOUNDARY_RE = re.compile(r"(?<=[.!?])\s+|\s*\n\s*")
 
 Doc.set_extension("poc_sentences", default=None, force=True)
 
