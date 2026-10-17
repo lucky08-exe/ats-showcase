@@ -13,7 +13,12 @@ from pathlib import Path
 
 import pytest
 
-from src.poc.tweak.batch_processor import JobResult, load_jobs, run_batch
+from src.poc.tweak.batch_processor import (
+    JobResult,
+    _normalize_section_content,
+    load_jobs,
+    run_batch,
+)
 
 
 class TestLoadJobs:
@@ -1602,3 +1607,26 @@ class TestBatchSentences:
         assert all("\n" not in s for s in sentences), f"Entry contains newline: {sentences!r}"
         assert any("Requirements" in s for s in sentences), f"Heading missing: {sentences!r}"
         assert any("You must know Python." in s for s in sentences), f"Sentence missing: {sentences!r}"
+
+
+class TestNormalizeSectionContent:
+    """Tests for _normalize_section_content() and its JSON-facing use (Issue #643/#679)."""
+
+    def test_normalize_section_content_collapses_whitespace(self):
+        """Newline runs and surrounding whitespace collapse to single spaces."""
+        assert _normalize_section_content("a\n\nb\n: c") == "a b : c"
+
+    def test_normalize_section_content_empty_string(self):
+        """Empty input stays empty."""
+        assert _normalize_section_content("") == ""
+
+    def test_markdown_sections_content_has_no_embedded_newlines(self):
+        """No markdown_sections[].content contains a newline after run_batch."""
+        fixture_path = Path(__file__).parent.parent / "fixtures" / "details_test_fixture.json"
+
+        results = run_batch(str(fixture_path))
+
+        sections = [sec for result in results for sec in result.markdown_sections]
+        assert sections, "Expected at least one markdown section in fixture output"
+        for sec in sections:
+            assert "\n" not in sec.content, f"Newline in section content: {sec.content!r}"
