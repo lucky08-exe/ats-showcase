@@ -1,5 +1,3 @@
-# Review + Assess Workflow
-
 ---
 name: assess-jobs
 description: Verify extracted jobs and run Claude assessment for CV fit scoring
@@ -24,6 +22,8 @@ allowed_tools:
   - Bash(pytest *)
   - Bash(tail *)
 ---
+
+# Review + Assess Workflow
 
 ## Workflow: Verify → Assess → Export Results
 

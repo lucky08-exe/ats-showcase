@@ -1,3 +1,9 @@
+---
+paths:
+  - "src/storage/**"
+  - "tests/storage/**"
+---
+
 # Storage Phase Rules
 
 SQLite schema, FTS5 full-text search, markdown export, query patterns.

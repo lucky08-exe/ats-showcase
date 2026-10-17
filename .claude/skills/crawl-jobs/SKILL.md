@@ -1,5 +1,3 @@
-# Crawl + Preprocess Workflow
-
 ---
 name: crawl-jobs
 description: Fetch job listings via Playwright and prepare for assessment (crawl + preprocess)
@@ -25,6 +23,8 @@ allowed_tools:
   - Bash(find *)
   - Bash(grep *)
 ---
+
+# Crawl + Preprocess Workflow
 
 ## Workflow: Crawl → Preprocess → Estimate Costs
 

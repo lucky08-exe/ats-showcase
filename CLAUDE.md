@@ -64,24 +64,6 @@ tail -f logs/app.log                             # Watch logs
 
 ---
 
----
-
-## Tech Stack
-
-| Component | Version | Purpose |
-|-----------|---------|---------|
-| Python | 3.11+ | Main runtime |
-| uv | latest | Dependency management |
-| Playwright | 1.40+ | Browser automation (crawl phase) |
-| spaCy | 3.7+ | NLP preprocessing, semantic chunking |
-| Claude API | Aug 2026 | Job assessment via LLM |
-| SQLite | 3.9.0+ | FTS5 full-text search support |
-| pytest | latest | Test framework |
-| ruff | latest | Linting + formatting |
-| mypy | latest | Type checking |
-
----
-
 ## Session State Preservation
 
 **Caveman Mode Hook**: Session insights auto-append to CLAUDE.md on termination (if enabled).

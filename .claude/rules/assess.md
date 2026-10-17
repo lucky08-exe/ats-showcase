@@ -1,17 +1,15 @@
+---
+paths:
+  - "src/assessment/**"
+  - "src/llm/**"
+  - "tests/assessment/**"
+---
+
 # Assess Phase Rules
 
 Claude API integration, prompt design, rate limiting, error handling, cost tracking.
 
 ## Claude API Client Pattern
-
-See [Core Constraints](../../.claude/CONSTRAINTS.md#never-rules-critical) (constraint: don't hardcode API calls). Use LLMProvider abstraction:
-
-```python
-from src.llm.provider import LLMProvider
-
-provider = LLMProvider(api_key=os.getenv("ANTHROPIC_API_KEY"))
-assessment = await provider.assess_job(cv_text, job_text)
-```
 
 **Provider interface:**
 - `assess_job(cv, job)` → `Assessment` object
@@ -38,12 +36,6 @@ assessment = await provider.assess_job(cv_text, job_text)
 **Claude limits:**
 - ~10 RPM (requests per minute)
 - ~50k TPM (tokens per minute)
-
-**Retry strategy (built into LLMProvider):**
-```python
-# Max 3 attempts with exponential backoff
-# Waits: 2s, then 4s, then 8s before retrying
-```
 
 **Catch transient errors:**
 - 429 (rate limit): Backoff → retry
