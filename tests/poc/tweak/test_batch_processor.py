@@ -13,7 +13,12 @@ from pathlib import Path
 
 import pytest
 
-from src.poc.tweak.batch_processor import JobResult, load_jobs, run_batch
+from src.poc.tweak.batch_processor import (
+    JobResult,
+    _normalize_section_content,
+    load_jobs,
+    run_batch,
+)
 
 
 class TestLoadJobs:
@@ -1573,11 +1578,10 @@ class TestBatchSentences:
             assert on.sections_detected == off.sections_detected, f"{off.job_id}: sections_detected differs"
             assert len(on.requirements) == len(off.requirements), f"{off.job_id}: requirements count differs"
 
-    def test_heading_merges_into_following_sentence_known_limitation(self, tmp_path):
-        """Documents known limitation: a markdown heading glues onto the next sentence.
+    def test_heading_splits_into_separate_sentence(self, tmp_path):
+        """After #677/#643 a markdown heading and the following sentence are separate entries.
 
-        See the "Known limitations" section of src/poc/sentence_splitter.py
-        (a heading without terminal punctuation joins the following sentence).
+        No sentence entry contains an embedded newline.
         """
         # Arrange
         test_file = tmp_path / "heading_sentences.json"
@@ -1597,8 +1601,32 @@ class TestBatchSentences:
         # Act
         results = run_batch(str(test_file))
 
-        # Assert - known limitation: heading and sentence merge into ONE entry
+        # Assert - heading and following sentence are separate entries, no embedded newline
         sentences = results[0].sentences
-        assert len(sentences) == 1, f"Expected merged single entry, got {sentences!r}"
-        assert "Requirements" in sentences[0]
-        assert "You must know Python." in sentences[0]
+        assert len(sentences) >= 2, f"Expected heading and sentence as separate entries, got {sentences!r}"
+        assert all("\n" not in s for s in sentences), f"Entry contains newline: {sentences!r}"
+        assert any("Requirements" in s for s in sentences), f"Heading missing: {sentences!r}"
+        assert any("You must know Python." in s for s in sentences), f"Sentence missing: {sentences!r}"
+
+
+class TestNormalizeSectionContent:
+    """Tests for _normalize_section_content() and its JSON-facing use (Issue #643/#679)."""
+
+    def test_normalize_section_content_collapses_whitespace(self):
+        """Newline runs and surrounding whitespace collapse to single spaces."""
+        assert _normalize_section_content("a\n\nb\n: c") == "a b : c"
+
+    def test_normalize_section_content_empty_string(self):
+        """Empty input stays empty."""
+        assert _normalize_section_content("") == ""
+
+    def test_markdown_sections_content_has_no_embedded_newlines(self):
+        """No markdown_sections[].content contains a newline after run_batch."""
+        fixture_path = Path(__file__).parent.parent / "fixtures" / "details_test_fixture.json"
+
+        results = run_batch(str(fixture_path))
+
+        sections = [sec for result in results for sec in result.markdown_sections]
+        assert sections, "Expected at least one markdown section in fixture output"
+        for sec in sections:
+            assert "\n" not in sec.content, f"Newline in section content: {sec.content!r}"

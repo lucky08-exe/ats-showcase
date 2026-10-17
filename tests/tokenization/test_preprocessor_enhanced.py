@@ -739,8 +739,8 @@ class TestPocSentenceSplitterWiring:
         assert on.segment_sentences(text)  # non-empty, so the comparison is meaningful
 
     def test_segment_sentences_poc_returns_regex_split_when_on(self, blank_spacy_load):
-        """With the flag on, segment_sentences_poc returns the regex split (newline inside a sentence kept)."""
+        """With the flag on, segment_sentences_poc returns the regex split (structural newline splits, #677)."""
         preprocessor = Preprocessor(extract_requirements=False)
         assert preprocessor.nlp is not None
         doc = preprocessor.nlp("Must know\nPython. Knows SQL! Also Go?")
-        assert preprocessor.segment_sentences_poc(doc) == ["Must know\nPython.", "Knows SQL!", "Also Go?"]
+        assert preprocessor.segment_sentences_poc(doc) == ["Must know", "Python.", "Knows SQL!", "Also Go?"]
