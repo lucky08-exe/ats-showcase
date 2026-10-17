@@ -35,6 +35,7 @@ CLI:
 
 import argparse
 import json
+import re
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -58,6 +59,18 @@ from src.poc.tweak.spacy_pipeline.heading_promoter import HeadingPromoter
 
 # Allowed description_selector_match strategies
 DESCRIPTION_MATCH_STRATEGIES = {"first", "all", "longest"}
+
+_WHITESPACE_RUN_RE = re.compile(r"\s+")
+
+
+def _normalize_section_content(text: str) -> str:
+    """Collapse whitespace runs to single spaces and strip (Issue #643/#679).
+
+    JSON-facing only: applied when building ``markdown_sections`` for output.
+    Internal ruler ``section.content`` keeps its newlines because requirement
+    and skill extraction depend on them.
+    """
+    return _WHITESPACE_RUN_RE.sub(" ", text).strip()
 
 
 @dataclass
@@ -375,7 +388,7 @@ def process_job(
                         md_section = MarkdownSection(
                             section_id=f"sec_{section_idx}",
                             heading=section.title or "",
-                            content=section.content,
+                            content=_normalize_section_content(section.content),
                             section_type=primary_type.section_type.value,
                             confidence=primary_type.confidence,
                             line_start=section.start_line or 0,
@@ -393,7 +406,7 @@ def process_job(
                         md_section = MarkdownSection(
                             section_id=f"sec_{section_idx}",
                             heading=section.title or "",
-                            content=section.content,
+                            content=_normalize_section_content(section.content),
                             section_type="unknown",
                             confidence=0.0,
                             line_start=section.start_line or 0,
