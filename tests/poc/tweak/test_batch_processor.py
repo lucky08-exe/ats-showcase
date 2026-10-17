@@ -1573,11 +1573,10 @@ class TestBatchSentences:
             assert on.sections_detected == off.sections_detected, f"{off.job_id}: sections_detected differs"
             assert len(on.requirements) == len(off.requirements), f"{off.job_id}: requirements count differs"
 
-    def test_heading_merges_into_following_sentence_known_limitation(self, tmp_path):
-        """Documents known limitation: a markdown heading glues onto the next sentence.
+    def test_heading_splits_into_separate_sentence(self, tmp_path):
+        """After #677/#643 a markdown heading and the following sentence are separate entries.
 
-        See the "Known limitations" section of src/poc/sentence_splitter.py
-        (a heading without terminal punctuation joins the following sentence).
+        No sentence entry contains an embedded newline.
         """
         # Arrange
         test_file = tmp_path / "heading_sentences.json"
@@ -1597,8 +1596,9 @@ class TestBatchSentences:
         # Act
         results = run_batch(str(test_file))
 
-        # Assert - known limitation: heading and sentence merge into ONE entry
+        # Assert - heading and following sentence are separate entries, no embedded newline
         sentences = results[0].sentences
-        assert len(sentences) == 1, f"Expected merged single entry, got {sentences!r}"
-        assert "Requirements" in sentences[0]
-        assert "You must know Python." in sentences[0]
+        assert len(sentences) >= 2, f"Expected heading and sentence as separate entries, got {sentences!r}"
+        assert all("\n" not in s for s in sentences), f"Entry contains newline: {sentences!r}"
+        assert any("Requirements" in s for s in sentences), f"Heading missing: {sentences!r}"
+        assert any("You must know Python." in s for s in sentences), f"Sentence missing: {sentences!r}"
