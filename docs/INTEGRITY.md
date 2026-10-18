@@ -1,6 +1,6 @@
 # Database Integrity & Repair Guide
 
-Comprehensive guide to detecting, inspecting, and safely repairing database anomalies in the ATS Playground assessment database.
+Comprehensive guide to detecting, inspecting, and safely repairing database anomalies in the ATS Showcase assessment database.
 
 ---
 
