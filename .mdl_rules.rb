@@ -1,4 +1,4 @@
-# Custom mdl rules for ATS Playground
+# Custom mdl rules for ATS Showcase
 # Disables rules that conflict with project conventions or have acceptable false positives
 
 rule 'MD001' do
