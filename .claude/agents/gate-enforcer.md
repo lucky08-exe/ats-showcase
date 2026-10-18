@@ -93,7 +93,7 @@ fi
 **Enforcement Mechanism:** Two layers in the harness. Agent frontmatter `permissions:` blocks are not read by Claude Code and are not enforcement.
 
 1. **`.claude/settings.json` `permissions.deny`** - `Edit(...)` rules for each protected path above. Claude Code applies `Edit(...)` rules to all file-editing tools, including `Write`, so separate `Write(...)` rules are not needed (removed in #703; verified in #702). Applies to every agent, including plugin subagents.
-2. **`.claude/hooks/protected-file-guard.sh`** - PreToolUse hook (matcher `Edit|Write`). Denies the same paths when `agent_type` is a known subagent type. Allows when `agent_type` is empty (human main session) or unrecognized, and never blocks the `SubagentHandback` pseudo-tool. Fails open on malformed input. Write protection for known subagents comes from this hook (Layer 2).
+2. **`.claude/hooks/protected-file-guard.sh`** - PreToolUse hook (matcher `Edit|Write`). Denies the same paths when `agent_type` is a known subagent type. Allows when `agent_type` is empty (human main session) or unrecognized, and never blocks the `SubagentHandback` pseudo-tool. Fails open on malformed input.
 
 **Verified (#702):** the top-level main-thread agent (no `agent_type`; the hook allows it) is still denied `Write` on protected paths by the `Edit(...)` rules in `permissions.deny`.
 
