@@ -13,7 +13,7 @@
 
 ## System Overview
 
-ATS Playground is an agentic AI workflow for job assessment. The system extracts job postings from multiple company websites, preprocesses them with NLP, displays them to users for verification, assesses CV fit using Claude, and stores results in a queryable database.
+ATS Showcase is an agentic AI workflow for job assessment. The system extracts job postings from multiple company websites, preprocesses them with NLP, displays them to users for verification, assesses CV fit using Claude, and stores results in a queryable database.
 
 **Core principle**: Verification before expensive LLM calls. Users confirm extracted jobs before assessment, reducing wasted tokens on invalid data.
 
