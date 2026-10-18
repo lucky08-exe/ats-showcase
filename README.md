@@ -1,6 +1,6 @@
 # ATS Showcase
 
-[![GitHub](https://img.shields.io/badge/github-pluto--atom--4%2Fats--playground-blue?logo=github)](https://github.com/pluto-atom-4/ats-showcase)
+[![GitHub](https://img.shields.io/badge/github-pluto--atom--4%2Fats--showcase-blue?logo=github)](https://github.com/pluto-atom-4/ats-showcase)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Status: Active](https://img.shields.io/badge/status-active-success)]()
