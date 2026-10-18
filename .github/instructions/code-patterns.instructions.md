@@ -4,7 +4,7 @@ applyTo: 'src/**/*.py'
 
 # Code Patterns & Conventions
 
-Code patterns and architectural conventions for ATS Playground. Use when writing production code.
+Code patterns and architectural conventions for ATS Showcase. Use when writing production code.
 
 ---
 
