@@ -92,11 +92,13 @@ fi
 
 **Enforcement Mechanism:** Two layers in the harness. Agent frontmatter `permissions:` blocks are not read by Claude Code and are not enforcement.
 
-1. **`.claude/settings.json` `permissions.deny`** - `Edit(...)` and `Write(...)` rules for each protected path above. Applies to every agent, including plugin subagents.
-2. **`.claude/hooks/protected-file-guard.sh`** - PreToolUse hook (matcher `Edit|Write`). Denies the same paths when `agent_type` is a known subagent type. Allows when `agent_type` is empty (human main session) or unrecognized, and never blocks the `SubagentHandback` pseudo-tool. Fails open on malformed input.
+1. **`.claude/settings.json` `permissions.deny`** - `Edit(...)` rules only for each protected path above (the `Write(...)` pairs were removed in #703). Applies to every agent, including plugin subagents.
+2. **`.claude/hooks/protected-file-guard.sh`** - PreToolUse hook (matcher `Edit|Write`). Denies the same paths when `agent_type` is a known subagent type. Allows when `agent_type` is empty (human main session) or unrecognized, and never blocks the `SubagentHandback` pseudo-tool. Fails open on malformed input. Write protection for known subagents comes from this hook (Layer 2).
+
+**Accepted risk (unverified):** Write protection for the top-level main-thread agent (no `agent_type`; the hook allows it) is not enforced at the config layer after #701/#703; spike #702 not yet run.
 
 If a subagent attempts to modify a protected file:
-- Tool layer denies the write (permissions.deny, then the hook)
+- Tool layer denies the write (permissions.deny for Edit; the hook for Write)
 - Fallback: Pre-commit hook catches and rejects commit
 - Escalation: Human approval required (Architect or Human role)
 
@@ -118,7 +120,7 @@ Model selection by role:
 ## Related
 
 - **AGENTS.md**: Role definitions and governance framework
-- **Settings**: `.claude/settings.json` (`permissions.deny`)
+- **Settings**: `.claude/settings.json` (`permissions.deny`, `Edit(...)` rules)
 - **Protected-file hook**: `.claude/hooks/protected-file-guard.sh`
 - **CI/CD Pipeline**: `.github/workflows/quality-checks.yml` (Gate 2 automation)
 

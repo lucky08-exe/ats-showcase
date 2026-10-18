@@ -26,26 +26,20 @@
       "Bash(graphify update .)"
     ],
     "deny": [
-      "Bash(rm -rf*)",
-      "Bash(rm -fR*)",
-      "Bash(rm -R*)",
       "Bash(git push --force*)",
       "Bash(git push -f*)",
       "Bash(git reset --hard*)",
-      "Read(.env*)",
+      "Bash(rm -R*)",
+      "Bash(rm -fR*)",
+      "Bash(rm -rf*)",
       "Edit(.env*)",
-      "Edit(/AGENTS.md)",
-      "Write(/AGENTS.md)",
-      "Edit(/CLAUDE.md)",
-      "Write(/CLAUDE.md)",
       "Edit(/.claude/agents/**)",
-      "Write(/.claude/agents/**)",
       "Edit(/.claude/rules/**)",
-      "Write(/.claude/rules/**)",
-      "Edit(/.claude/skills/**)",
-      "Write(/.claude/skills/**)",
       "Edit(/.claude/settings.json)",
-      "Write(/.claude/settings.json)"
+      "Edit(/.claude/skills/**)",
+      "Edit(/AGENTS.md)",
+      "Edit(/CLAUDE.md)",
+      "Read(.env*)"
     ],
     "ask": [
       "Bash(rm *)",
