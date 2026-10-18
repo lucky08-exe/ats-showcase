@@ -7,7 +7,7 @@
 
 ## Overview
 
-The ATS Playground job parsing pipeline consists of three integrated components that work together to extract job postings from company career pages:
+The ATS Showcase job parsing pipeline consists of three integrated components that work together to extract job postings from company career pages:
 
 1. **Crawler** (`src/browser/crawler.py`) — Navigates listing pages and extracts structured job data
 2. **Selector Manager** (`src/browser/selectors.py`) — Manages CSS selectors for multi-site support
