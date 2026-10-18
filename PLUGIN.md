@@ -1,6 +1,6 @@
 # PLUGIN.md
 
-GitHub Copilot CLI plugin configuration for ATS Playground.
+GitHub Copilot CLI plugin configuration for ATS Showcase.
 
 ## Two-System Architecture
 
@@ -18,9 +18,9 @@ Unlike Claude Code (which uses `.claude/settings.json`), GitHub Copilot CLI requ
 - Prerequisites: GitHub Copilot CLI installed + authenticated
 - When available: During CLI sessions
 
-## Installing ATS Playground Plugin
+## Installing ATS Showcase Plugin
 
-To enable ATS Playground skills in GitHub Copilot CLI sessions:
+To enable ATS Showcase skills in GitHub Copilot CLI sessions:
 
 ```bash
 # Install the plugin
