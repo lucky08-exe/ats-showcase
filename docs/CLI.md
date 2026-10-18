@@ -2,7 +2,7 @@
 
 ## Overview
 
-The CLI phase provides a unified command-line interface orchestrating all ATS Playground phases:
+The CLI phase provides a unified command-line interface orchestrating all ATS Showcase phases:
 
 1. **Command organization** - Logical grouping (crawl, preprocess, verify, assess, store, export)
 2. **Interactive workflows** - Real-time user feedback during long operations
@@ -117,7 +117,7 @@ app.command()(stats.stats_command)
 @app.command()
 def version():
     """Show version."""
-    console.print("ATS Playground v1.0.0")
+    console.print("ATS Showcase v1.0.0")
 
 @app.command()
 def init():
@@ -125,7 +125,7 @@ def init():
     from src.storage import StorageClient
     from pathlib import Path
 
-    console.print("[bold]Initializing ATS Playground...[/bold]")
+    console.print("[bold]Initializing ATS Showcase...[/bold]")
 
     # Create directories
     Path("data").mkdir(exist_ok=True)
@@ -423,7 +423,7 @@ def assess_command(
 
 ## Preprocessing & Boilerplate Removal (Issue #230 + #231)
 
-ATS Playground's preprocessing phase includes consolidated HTML cleaning with 70+ boilerplate patterns and a 3-tier fallback chain ensuring robustness.
+ATS Showcase's preprocessing phase includes consolidated HTML cleaning with 70+ boilerplate patterns and a 3-tier fallback chain ensuring robustness.
 
 ### What is Boilerplate Removal?
 
@@ -545,7 +545,7 @@ This enables:
 
 ## Interactive TUI Dashboard
 
-ATS Playground includes an optional **Textual-based interactive dashboard** for real-time workflow visualization. The dashboard runs the complete workflow (crawl → preprocess → assess → export) with live progress tracking, cost accumulation, and pause/resume controls.
+ATS Showcase includes an optional **Textual-based interactive dashboard** for real-time workflow visualization. The dashboard runs the complete workflow (crawl → preprocess → assess → export) with live progress tracking, cost accumulation, and pause/resume controls.
 
 ### Enabling the Dashboard
 
@@ -570,7 +570,7 @@ uv run python -m src.cli all --no-tui --cv data/cv.json --config config/companie
 
 ```
 ┌──────────────────────────────────────────────────┐
-│ 🎯 ATS Playground - Workflow Dashboard          │
+│ 🎯 ATS Showcase - Workflow Dashboard             │
 │ Tokens: 45,230 | Total Cost: $0.1357            │
 ├──────────────────────────────────────────────────┤
 │ ✅ Crawl | ⏳ Preprocess | ⚪ Assess | ⚪ Export │
