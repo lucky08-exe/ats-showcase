@@ -13,7 +13,7 @@ permissions:
 
 # Gate Enforcement Policy
 
-Automated enforcement of Gate 1 & Gate 2 quality checkpoints for ATS Playground multi-file changes.
+Automated enforcement of Gate 1 & Gate 2 quality checkpoints for ATS Showcase multi-file changes.
 
 ## Gate 1: Plan Review
 

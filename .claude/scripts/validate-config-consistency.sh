@@ -1,5 +1,5 @@
 #!/bin/bash
-# Validate ATS Playground configuration consistency
+# Validate ATS Showcase configuration consistency
 # Detects: duplicate constraints, permission conflicts, file size limits
 
 set -e

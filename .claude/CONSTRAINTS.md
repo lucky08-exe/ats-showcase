@@ -1,4 +1,4 @@
-# ATS Playground: Core Constraints
+# ATS Showcase: Core Constraints
 
 Single source of truth for NEVER and ALWAYS rules. Extract from CLAUDE.md + phase rules.
 

@@ -1,6 +1,6 @@
 # Agent Roles & Governance
 
-Multi-agent coordination framework for ATS Playground: role boundaries + escalation.
+Multi-agent coordination framework for ATS Showcase: role boundaries + escalation.
 
 ---
 

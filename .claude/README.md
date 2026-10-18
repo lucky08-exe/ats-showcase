@@ -1,6 +1,6 @@
 # .claude/ Directory
 
-Claude Code configuration for ATS Playground. See [AGENTS.md](../AGENTS.md) for
+Claude Code configuration for ATS Showcase. See [AGENTS.md](../AGENTS.md) for
 role governance and [CLAUDE.md](../CLAUDE.md) for setup/workflow.
 
 ## Code Graph Tooling (Issue #325, upgraded #328)
