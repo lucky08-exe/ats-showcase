@@ -570,7 +570,7 @@ uv run python -m src.cli all --no-tui --cv data/cv.json --config config/companie
 
 ```
 ┌──────────────────────────────────────────────────┐
-│ 🎯 ATS Showcase - Workflow Dashboard            │
+│ 🎯 ATS Showcase - Workflow Dashboard             │
 │ Tokens: 45,230 | Total Cost: $0.1357            │
 ├──────────────────────────────────────────────────┤
 │ ✅ Crawl | ⏳ Preprocess | ⚪ Assess | ⚪ Export │
