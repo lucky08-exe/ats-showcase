@@ -1,4 +1,4 @@
-# DESIGN.md: ATS Playground Architecture
+# DESIGN.md: ATS Showcase Architecture
 
 **Version:** 2.1 (Anthropic standards + Requirements Extraction)
 **Last Updated:** 2026-08-01
@@ -8,7 +8,7 @@
 
 ## 1. PRODUCT NARRATIVE
 
-ATS Playground: CV-to-job assessment in 5 phases (crawl → preprocess → verify → assess → export) + enhancement phases 5-7 for soft skills & keyword expansion (45% → 99.8% semantic accuracy).
+ATS Showcase: CV-to-job assessment in 5 phases (crawl → preprocess → verify → assess → export) + enhancement phases 5-7 for soft skills & keyword expansion (45% → 99.8% semantic accuracy).
 
 **Core:** Playwright crawling → MarkItDown HTML cleanup (15× token reduction: ~6,000 → ~400) → spaCy semantic chunks → requirement extraction (Phase 8a/8b) → interactive verification → Claude scoring → FTS5 storage → markdown export.
 
