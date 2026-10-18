@@ -1,6 +1,6 @@
 # Custom Skills Index
 
-Indexed catalog of Claude Code skills for ATS Playground. Each skill automates a phase of the workflow.
+Indexed catalog of Claude Code skills for ATS Showcase. Each skill automates a phase of the workflow.
 
 ---
 
