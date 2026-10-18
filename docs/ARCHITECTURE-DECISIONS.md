@@ -10,7 +10,7 @@
 
 ### Decision Context
 
-ATS Playground manages a 4-phase workflow: crawl (extract HTML), preprocess (clean + chunk), assess (Claude API calls), export (markdown reports). Each phase processes dozens to thousands of jobs.
+ATS Showcase manages a 4-phase workflow: crawl (extract HTML), preprocess (clean + chunk), assess (Claude API calls), export (markdown reports). Each phase processes dozens to thousands of jobs.
 
 The UI must show:
 - Real-time progress bars (crawl: 10.5 jobs/min, assess: 2-5 jobs/min)
@@ -381,7 +381,7 @@ Urwid/Blessed have no testing framework.
 
 ### Conclusion
 
-**Textual is the best choice for ATS Playground.**
+**Textual is the best choice for ATS Showcase.**
 
 - Async-first architecture matches workflow nature (crawl + LLM parallel)
 - Real-time rendering prevents UX bugs (flicker, stale progress)
@@ -632,7 +632,7 @@ Batch API is optimized for:
 - Latency-tolerant workflows (results in 24h)
 - Cost savings (50% cheaper: $0.003 → $0.0015 per 1M input tokens)
 
-ATS Playground needs:
+ATS Showcase needs:
 - Results immediately (for interactive verification)
 - Show top matches as jobs are assessed (real-time)
 - User can see progress + cost accumulation live
@@ -668,7 +668,7 @@ Claude has soft limits:
 - **Textual:** https://textual.textualize.io/
 - **Rich:** https://rich.readthedocs.io/
 - **Claude API:** https://docs.anthropic.com/
-- **GitHub Issue #89:** https://github.com/pluto-atom-4/ats-playground/issues/89
+- **GitHub Issue #89:** https://github.com/pluto-atom-4/ats-showcase/issues/89
 
 ---
 
