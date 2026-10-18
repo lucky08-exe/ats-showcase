@@ -1,4 +1,4 @@
-"""Job storage and management for ATS Playground."""
+"""Job storage and management for ATS Showcase."""
 
 import logging
 import sqlite3

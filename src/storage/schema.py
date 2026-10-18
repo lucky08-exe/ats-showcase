@@ -1,4 +1,4 @@
-"""Consolidated database schema definitions for ATS Playground.
+"""Consolidated database schema definitions for ATS Showcase.
 
 This module centralizes all table schema definitions to avoid duplication
 across JobStore, AssessmentStore, and other storage modules.
