@@ -4,7 +4,7 @@ applyTo: 'src/cli.py'
 
 # CLI Usage Instructions
 
-CLI command reference for ATS Playground. Use when working with `uv run python -m src.cli` commands.
+CLI command reference for ATS Showcase. Use when working with `uv run python -m src.cli` commands.
 
 ---
 
