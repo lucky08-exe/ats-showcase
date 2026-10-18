@@ -5,7 +5,7 @@ excludeAgent: "code-review"
 
 # GitHub Copilot Issue Implementation Workflow
 
-**Purpose**: Standardized workflow for implementing or fixing GitHub Issues in ATS Playground using GitHub Copilot CLI.
+**Purpose**: Standardized workflow for implementing or fixing GitHub Issues in ATS Showcase using GitHub Copilot CLI.
 
 **Audience**: Developers using `gh copilot` to work on issues
 
@@ -188,7 +188,7 @@ git checkout -b feat/issue-19-poc-crawl
 
    **Documentation Structure (Two-Location Approach):**
 
-   ATS Playground uses a dual documentation model for GitHub Issues:
+   ATS Showcase uses a dual documentation model for GitHub Issues:
 
    a) **Implementation Planning** (`docs/implementation-planning/`)
       - File: `issue-<NUMBER>-<kebab-case-title>.md`
@@ -668,7 +668,7 @@ gh pr merge
 
 ### File Locations
 
-The ATS Playground repository uses an official GitHub Copilot instructions structure with a two-location documentation approach for GitHub Issues:
+The ATS Showcase repository uses an official GitHub Copilot instructions structure with a two-location documentation approach for GitHub Issues:
 
 ```
 Project Root
@@ -852,7 +852,7 @@ gh pr create --title "..." --base main
 
 ## Related Documentation
 
-This file is part of the ATS Playground GitHub Copilot instruction system. For complete context:
+This file is part of the ATS Showcase GitHub Copilot instruction system. For complete context:
 
 **File Structure** (Official GitHub Copilot Patterns):
 - **`.github/copilot-instructions.md`** - Repository-wide Copilot instructions (all users)
