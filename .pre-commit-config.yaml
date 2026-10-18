@@ -1,4 +1,4 @@
-# Pre-commit hook configuration for ATS Playground
+# Pre-commit hook configuration for ATS Showcase
 # Install hooks: python -m src.setup.setup_precommit
 # Run manually: pre-commit run --all-files
 # Skip hooks: SKIP=hook_name git commit -m "..."
