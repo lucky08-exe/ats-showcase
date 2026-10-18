@@ -1,6 +1,6 @@
-# ATS Playground CLI - Step-by-Step Workflow Guide
+# ATS Showcase CLI - Step-by-Step Workflow Guide
 
-Complete reference for using the ATS Playground command-line interface to run the intelligent job assessment workflow.
+Complete reference for using the ATS Showcase command-line interface to run the intelligent job assessment workflow.
 
 ---
 
@@ -22,7 +22,7 @@ uv run python -m src.cli all --cv data/cv.json --config-dir ./config
 
 ## Quick Start with Interactive Dashboard
 
-ATS Playground includes an interactive Textual dashboard that shows real-time progress, live cost tracking, and top job matches as the workflow runs.
+ATS Showcase includes an interactive Textual dashboard that shows real-time progress, live cost tracking, and top job matches as the workflow runs.
 
 **Dashboard auto-launches in interactive terminals:**
 
@@ -295,12 +295,12 @@ Raw HTML job posting:     ~6,000 tokens
 
 Per-job cost:
   Raw approach:           $0.018
-  ATS Playground (v2.0):  $0.002
+  ATS Showcase (v2.0):    $0.002
   Savings:                89% per job
 
 Example: Assessing 100 jobs
   Raw (no preprocessing):  $1.80
-  ATS Playground (v2.0):   $0.20
+  ATS Showcase (v2.0):     $0.20
   Total savings:           $1.60 (89%)
 ```
 
