@@ -2,7 +2,7 @@
 
 ## Reporting Vulnerabilities
 
-**Please do not publicly disclose security vulnerabilities** found in ATS Playground. Instead:
+**Please do not publicly disclose security vulnerabilities** found in ATS Showcase. Instead:
 
 1. **Email Security Concern**: Send an email to the repository maintainers describing the vulnerability
 2. **Include Details**:
@@ -72,7 +72,7 @@ See [KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) for documented security consideratio
 
 ## Security Standards
 
-ATS Playground follows these security standards and best practices:
+ATS Showcase follows these security standards and best practices:
 
 - **OWASP Top 10**: https://owasp.org/www-project-top-ten/
 - **Python Security**: https://python.readthedocs.io/en/stable/library/security_considerations.html

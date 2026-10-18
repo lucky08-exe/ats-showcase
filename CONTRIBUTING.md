@@ -1,6 +1,6 @@
-# Contributing to ATS Playground
+# Contributing to ATS Showcase
 
-We appreciate your interest in contributing to the ATS Playground project! This guide explains how to set up your development environment, submit contributions, and maintain our high standards for code quality and security.
+We appreciate your interest in contributing to the ATS Showcase project! This guide explains how to set up your development environment, submit contributions, and maintain our high standards for code quality and security.
 
 ## Table of Contents
 
@@ -69,7 +69,7 @@ mypy --version
 
 ## Understanding Agent Roles
 
-ATS Playground uses a **multi-agent coordination model** to organize development work. Read [AGENTS.md](./AGENTS.md) to understand:
+ATS Showcase uses a **multi-agent coordination model** to organize development work. Read [AGENTS.md](./AGENTS.md) to understand:
 
 - **Architect/Planner**: Designs features, writes tasks.md, reads DESIGN.md
 - **Builder/Implementer**: Writes production code, implements features from tasks.md
@@ -89,7 +89,7 @@ This structure keeps work organized and prevents bottlenecks when multiple agent
 
 ### What is the Plugin?
 
-ATS Playground provides a GitHub Copilot CLI plugin with 3 reusable skills for automating job assessment workflows. These skills extend GitHub Copilot CLI sessions with ATS-specific capabilities.
+ATS Showcase provides a GitHub Copilot CLI plugin with 3 reusable skills for automating job assessment workflows. These skills extend GitHub Copilot CLI sessions with ATS-specific capabilities.
 
 **Available Skills:**
 - `/ats-nlp-setup` — Configure NLP models and spaCy environment
@@ -99,13 +99,13 @@ ATS Playground provides a GitHub Copilot CLI plugin with 3 reusable skills for a
 ### Prerequisites
 
 - GitHub Copilot CLI (v1.0.51+) — Download from [GitHub Copilot CLI releases](https://github.com/github/copilot-cli/releases)
-- Python 3.11+ with ATS Playground installed (see [Getting Started](#setup-development-environment))
+- Python 3.11+ with ATS Showcase installed (see [Getting Started](#setup-development-environment))
 - GitHub authentication: `gh auth status`
 
 ### Install the Plugin
 
 ```bash
-# Install the ATS Playground plugin
+# Install the ATS Showcase plugin
 gh copilot -- plugin install pluto-atom-4/copilot-plugin-ats-playground
 
 # Verify installation
@@ -681,6 +681,6 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 
 ---
 
-**Thank you for contributing to ATS Playground!** 🚀
+**Thank you for contributing to ATS Showcase!** 🚀
 
 Your contributions help make this project better for everyone.
