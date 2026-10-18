@@ -1,6 +1,6 @@
 # 🔍 Code Quality Assurance Guide
 
-This guide explains how to use pre-commit hooks for automated code quality checks in the ATS Playground project. Pre-commit hooks catch formatting, linting, type, and testing issues **before** commits, providing fast feedback and maintaining consistent code standards.
+This guide explains how to use pre-commit hooks for automated code quality checks in the ATS Showcase project. Pre-commit hooks catch formatting, linting, type, and testing issues **before** commits, providing fast feedback and maintaining consistent code standards.
 
 ---
 

@@ -1,6 +1,6 @@
 # Documentation Index
 
-Welcome to ATS Playground documentation. Start with the quick-start guide or explore phase-specific details below.
+Welcome to ATS Showcase documentation. Start with the quick-start guide or explore phase-specific details below.
 
 ## Getting Started
 
@@ -10,7 +10,7 @@ If you hit issues: **[docs/COMPATIBILITY.md](./docs/COMPATIBILITY.md)** - Troubl
 
 ## Pipeline Overview
 
-ATS Playground follows a 6-phase pipeline for job assessment:
+ATS Showcase follows a 6-phase pipeline for job assessment:
 
 ```
 CRAWL (Playwright)
