@@ -92,13 +92,13 @@ fi
 
 **Enforcement Mechanism:** Two layers in the harness. Agent frontmatter `permissions:` blocks are not read by Claude Code and are not enforcement.
 
-1. **`.claude/settings.json` `permissions.deny`** - `Edit(...)` rules only for each protected path above (the `Write(...)` pairs were removed in #703). Applies to every agent, including plugin subagents.
+1. **`.claude/settings.json` `permissions.deny`** - `Edit(...)` rules for each protected path above. Claude Code applies `Edit(...)` rules to all file-editing tools, including `Write`, so separate `Write(...)` rules are not needed (removed in #703; verified in #702). Applies to every agent, including plugin subagents.
 2. **`.claude/hooks/protected-file-guard.sh`** - PreToolUse hook (matcher `Edit|Write`). Denies the same paths when `agent_type` is a known subagent type. Allows when `agent_type` is empty (human main session) or unrecognized, and never blocks the `SubagentHandback` pseudo-tool. Fails open on malformed input. Write protection for known subagents comes from this hook (Layer 2).
 
-**Accepted risk (unverified):** Write protection for the top-level main-thread agent (no `agent_type`; the hook allows it) is not enforced at the config layer after #701/#703; spike #702 not yet run.
+**Verified (#702):** the top-level main-thread agent (no `agent_type`; the hook allows it) is still denied `Write` on protected paths by the `Edit(...)` rules in `permissions.deny`.
 
 If a subagent attempts to modify a protected file:
-- Tool layer denies the write (permissions.deny for Edit; the hook for Write)
+- Tool layer denies the write (permissions.deny `Edit(...)` rules cover Write; the hook is a second layer for subagents)
 - Fallback: Pre-commit hook catches and rejects commit
 - Escalation: Human approval required (Architect or Human role)
 
