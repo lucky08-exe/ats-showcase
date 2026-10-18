@@ -208,7 +208,7 @@ def call_claude(client, messages):
 
 #### ✅ Recommended Setup
 - **spaCy 3.8+**: Full Python 3.13 support, Pydantic v2 compatible
-- **Model**: en_core_web_sm for ATS Playground (12 MB, ~80 MB RAM)
+- **Model**: en_core_web_sm for ATS Showcase (12 MB, ~80 MB RAM)
 - **Installation method**: Always via UV to ensure correct virtual environment
 
 #### ⚠️ Safe Download Flow
@@ -674,7 +674,7 @@ uv sync --upgrade
 - **Use SQLite indexed queries** on company_id and extracted_date
 - **Parallel preprocessing**: Process 3-5 jobs in parallel for 200+ jobs/min throughput
 
-## Recommended Configuration for ATS Playground
+## Recommended Configuration for ATS Showcase
 
 ```toml
 # pyproject.toml - Optimized for ATS

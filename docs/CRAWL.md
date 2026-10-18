@@ -127,7 +127,7 @@ from src.browser.adapter_factory import AdapterFactory
 
 @click.group()
 def cli():
-    """ATS Playground - Job Crawling Tool"""
+    """ATS Showcase - Job Crawling Tool"""
     pass
 
 @cli.command()
@@ -230,7 +230,7 @@ from pathlib import Path
 from typing import Optional
 from src.browser.adapter_factory import AdapterFactory
 
-app = typer.Typer(help="ATS Playground - Job Crawling Tool")
+app = typer.Typer(help="ATS Showcase - Job Crawling Tool")
 
 @app.command()
 def crawl(
