@@ -1,4 +1,4 @@
-# ATS Playground
+# ATS Showcase
 
 [![GitHub](https://img.shields.io/badge/github-pluto--atom--4%2Fats--playground-blue?logo=github)](https://github.com/pluto-atom-4/ats-showcase)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/downloads/)
@@ -84,7 +84,7 @@ python -m src.cli all --cv data/cv.json --config config/companies.json --no-tui
 
 ## 🌍 Environment Configuration
 
-ATS Playground requires environment variables for API keys and configuration. Set them in `.env` (created during quick start).
+ATS Showcase requires environment variables for API keys and configuration. Set them in `.env` (created during quick start).
 
 ### Required Variables
 
@@ -363,14 +363,14 @@ See [docs/CLI.md](./docs/CLI.md) for full command reference.
 
 ## 💰 Cost Optimization
 
-ATS Playground cuts LLM costs **80–90%** through local preprocessing.
+ATS Showcase cuts LLM costs **80–90%** through local preprocessing.
 
 ### Example: Assess 100 Jobs
 
 | Approach | Tokens/Job | Total Tokens | Cost (Claude 3.5) | Savings |
 |----------|-----------|--------------|-------------------|---------|
 | **Raw HTML → LLM** | ~6,000 | 600,000 | ~$0.60 | — |
-| **ATS Playground** | ~700 | 70,000 | ~$0.07 | **88%** ✅ |
+| **ATS Showcase** | ~700 | 70,000 | ~$0.07 | **88%** ✅ |
 
 **Breakdown:**
 - Crawl locally (0 tokens)
