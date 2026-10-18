@@ -6,7 +6,7 @@ paths:
 
 # TUI Implementation Reference
 
-Textual-based Text User Interface for ATS Playground.
+Textual-based Text User Interface for ATS Showcase.
 
 ## Quick Links
 

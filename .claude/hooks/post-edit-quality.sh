@@ -1,5 +1,5 @@
 #!/bin/bash
-# Post-edit quality checks for ATS Playground
+# Post-edit quality checks for ATS Showcase
 # Runs code quality tools on edited files: ruff, mypy, bandit, and relevant tests
 
 set -e

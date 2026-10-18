@@ -2,7 +2,7 @@
 
 @AGENTS.md
 
-ATS Playground: CV-to-jobs assessment system. Crawls career pages, preprocesses HTML, sends to Claude for scoring.
+ATS Showcase: CV-to-jobs assessment system. Crawls career pages, preprocesses HTML, sends to Claude for scoring.
 
 **See [Core Constraints](.claude/CONSTRAINTS.md) for NEVER/ALWAYS rules.**
 
